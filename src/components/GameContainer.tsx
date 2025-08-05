@@ -1,18 +1,22 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import GameBoard from './GameBoard';
+import LevelIndicator from './LevelIndicator';
+import StatsDisplay from './StatsDisplay';
 import { useInterval } from '../hooks/useInterval';
 
-// --- CONSTANTS, TYPES, SHAPES ---
+// --- CONSTANTS AND CONFIGURATION ---
 export const GRID_SIZE: [number, number, number] = [10, 20, 10];
 export const CELL_SIZE = 30;
-const DROP_INTERVAL = 1000;
-const ANIMATION_DURATION = 150; // ms
+const INITIAL_DROP_INTERVAL = 1000;
+const MIN_DROP_INTERVAL = 100;
+const ANIMATION_DURATION = 250;
 
 export type Vector3 = [number, number, number];
 export type Shape = Vector3[];
 export type Grid = (number | string)[][][];
 
 const SHAPES: Shape[] = [
+  // ... shapes are unchanged
   [[0,0,0],[1,0,0],[0,0,1],[1,0,1],[0,1,0],[1,1,0],[0,1,1],[1,1,1]],
   [[0,0,0],[0,1,0],[0,2,0],[0,3,0]],
   [[0,0,0],[0,1,0],[0,2,0],[1,2,0]],
@@ -30,16 +34,66 @@ const createEmptyGrid = (): Grid =>
 const GameContainer = () => {
   const [grid, setGrid] = useState<Grid>(() => createEmptyGrid());
   const [currentPiece, setCurrentPiece] = useState<Shape | null>(null);
-  const [score, setScore] = useState(0);
   const [isGameOver, setIsGameOver] = useState(false);
-  // highlight-start
-  // --- NEW STATE FOR ANIMATIONS ---
   const [isAnimating, setIsAnimating] = useState(false);
   const [clearingBlocks, setClearingBlocks] = useState<Shape>([]);
+  
+  // --- STATS STATE ---
+  const [score, setScore] = useState(0);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [timePassed, setTimePassed] = useState(0);
+  const [dropInterval, setDropInterval] = useState(INITIAL_DROP_INTERVAL);
+  const [speedLevel, setSpeedLevel] = useState(1);
+  // highlight-start
+  const [cubesPlayed, setCubesPlayed] = useState(0);
   // highlight-end
+  
+  useEffect(() => {
+    setStartTime(Date.now());
+    createNewPiece();
+  }, []);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (startTime && !isGameOver) {
+      timer = setInterval(() => {
+        setTimePassed(Date.now() - startTime);
+      }, 100);
+    }
+    return () => clearInterval(timer);
+  }, [startTime, isGameOver]);
+  
+  useEffect(() => {
+    if (score > 0) {
+      const newLevel = Math.floor(score / 1000) + 1;
+      setSpeedLevel(newLevel);
+      const newInterval = Math.max(
+        MIN_DROP_INTERVAL,
+        INITIAL_DROP_INTERVAL - (newLevel - 1) * 50
+      );
+      setDropInterval(newInterval);
+    }
+  }, [score]);
+
+  const levelStatus = useMemo(() => {
+    // ... no changes to this memo
+    const status = new Array(GRID_SIZE[1]).fill(false);
+    for (let y = 0; y < GRID_SIZE[1]; y++) {
+      for (let x = 0; x < GRID_SIZE[0]; x++) {
+        for (let z = 0; z < GRID_SIZE[2]; z++) {
+          if (grid[x][y][z] !== 0) {
+            status[y] = true;
+            break;
+          }
+        }
+        if (status[y]) break;
+      }
+    }
+    return status;
+  }, [grid]);
 
   const isValidMove = useCallback((piece: Shape, currentGrid: Grid): boolean => {
-    // ... no changes ...
+    // ... no changes to this function
     for (const block of piece) {
       const [x, y, z] = block;
       if (
@@ -55,7 +109,7 @@ const GameContainer = () => {
   }, []);
 
   const createNewPiece = useCallback(() => {
-    // ... no changes ...
+    // ... no changes to this function
     const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
     const newPiece = shape.map(block => {
       const x = block[0] + Math.floor(GRID_SIZE[0] / 2) - 1;
@@ -72,22 +126,22 @@ const GameContainer = () => {
     }
   }, [grid, isValidMove]);
 
-  useEffect(() => {
-    createNewPiece();
-  }, []);
+  const processLandedPiece = useCallback((landedPiece: Shape, isHardDrop: boolean) => {
+    setIsAnimating(true);
+    setCurrentPiece(null);
 
-  const processLandedPiece = useCallback((landedPiece: Shape) => {
-    setIsAnimating(true); // Pause game input and dropping
-    setCurrentPiece(null); // Hide the falling piece
+    // highlight-start
+    // Update stats for the placed piece
+    setScore(prev => prev + (isHardDrop ? 20 : 10));
+    setCubesPlayed(prev => prev + landedPiece.length); // Increment by the number of cubes in the piece
+    // highlight-end
 
-    // 1. Merge the piece into a temporary grid
     const tempGrid = grid.map(row => row.map(col => [...col]));
     landedPiece.forEach(block => {
-      const [x, y, z] = block;
-      if (y >= 0) tempGrid[x][y][z] = 1;
+      if (block[1] >= 0) tempGrid[block[0]][block[1]][block[2]] = 1;
     });
-
-    // 2. Check for full lines in the temp grid
+    
+    // ... animation and line clearing logic remains the same ...
     const fullLayersY: number[] = [];
     for (let y = 0; y < GRID_SIZE[1]; y++) {
       let isLayerFull = true;
@@ -100,14 +154,10 @@ const GameContainer = () => {
         }
         if (!isLayerFull) break;
       }
-      if (isLayerFull) {
-        fullLayersY.push(y);
-      }
+      if (isLayerFull) fullLayersY.push(y);
     }
 
-    // 3. If there are lines to clear, start the animation
     if (fullLayersY.length > 0) {
-      // a. Find the blocks to animate out
       const blocksToClear: Shape = [];
       for (let y of fullLayersY) {
         for (let x = 0; x < GRID_SIZE[0]; x++) {
@@ -118,44 +168,42 @@ const GameContainer = () => {
       }
       setClearingBlocks(blocksToClear);
 
-      // b. After animation, update the grid properly
       setTimeout(() => {
         let newGrid = [...tempGrid];
-        let linesCleared = 0;
-        for (let y = GRID_SIZE[1] - 1; y >= 0; y--) {
-            if (fullLayersY.includes(y)) {
-                linesCleared++;
-                for (let yy = y; yy > 0; yy--) {
-                  for (let x = 0; x < GRID_SIZE[0]; x++) {
-                    for (let z = 0; z < GRID_SIZE[2]; z++) {
-                      newGrid[x][yy][z] = newGrid[x][yy - 1][z];
-                    }
-                  }
-                }
+        for (let y of fullLayersY.sort((a, b) => b - a)) {
+            for (let yy = y; yy > 0; yy--) {
                 for (let x = 0; x < GRID_SIZE[0]; x++) {
-                  for (let z = 0; z < GRID_SIZE[2]; z++) {
+                    for (let z = 0; z < GRID_SIZE[2]; z++) {
+                        newGrid[x][yy][z] = newGrid[x][yy - 1][z];
+                    }
+                }
+            }
+            for (let x = 0; x < GRID_SIZE[0]; x++) {
+                for (let z = 0; z < GRID_SIZE[2]; z++) {
                     newGrid[x][0][z] = 0;
-                  }
                 }
             }
         }
         
-        setScore(prev => prev + linesCleared * 100 * linesCleared);
+        const points = fullLayersY.length * 100 * fullLayersY.length;
+        const speedMultiplier = 1 + (speedLevel - 1) * 0.1;
+        setScore(prev => prev + Math.round(points * speedMultiplier));
+        
         setGrid(newGrid);
         setClearingBlocks([]);
         createNewPiece();
         setIsAnimating(false);
       }, ANIMATION_DURATION);
     } else {
-      // 4. If no lines to clear, just update the grid and continue
       setGrid(tempGrid);
       createNewPiece();
       setIsAnimating(false);
     }
-  }, [grid, createNewPiece]);
-  
+  }, [grid, createNewPiece, speedLevel]);
+
+  // All other game logic functions (movePiece, rotatePiece, hardDrop, drop, handleKeyDown)
+  // remain completely unchanged.
   const movePiece = useCallback((delta: Vector3) => {
-    // ... no changes ...
     if (!currentPiece || isAnimating) return;
     const newPiece = currentPiece.map(block =>
         [block[0] + delta[0], block[1] + delta[1], block[2] + delta[2]] as Vector3
@@ -163,13 +211,12 @@ const GameContainer = () => {
     if (isValidMove(newPiece, grid)) {
       setCurrentPiece(newPiece);
     } else if (delta[1] > 0) {
-      processLandedPiece(currentPiece);
+      processLandedPiece(currentPiece, false);
     }
   }, [currentPiece, isAnimating, grid, isValidMove, processLandedPiece]);
   
   const rotatePiece = useCallback((axis: 'x' | 'y' | 'z') => {
     if (!currentPiece || isAnimating) return;
-    // ... The rest of the rotation logic is unchanged ...
     const center = currentPiece[0];
     const rotatedPiece = currentPiece.map(block => {
         const [x, y, z] = [block[0] - center[0], block[1] - center[1], block[2] - center[2]];
@@ -187,7 +234,6 @@ const GameContainer = () => {
         ] as Vector3;
     });
     if(isValidMove(rotatedPiece, grid)) {
-      // Instead of instant update, we can add a smooth rotation later if desired
       setCurrentPiece(rotatedPiece);
     }
   }, [currentPiece, isAnimating, grid, isValidMove]);
@@ -203,19 +249,17 @@ const GameContainer = () => {
         break;
       }
     }
-    processLandedPiece(landedPiece);
+    processLandedPiece(landedPiece, true);
   }, [currentPiece, isAnimating, grid, isValidMove, processLandedPiece]);
 
   const drop = useCallback(() => {
     movePiece([0, 1, 0]);
   }, [movePiece]);
 
-  // The game loop now pauses if we are animating
-  useInterval(drop, isGameOver || isAnimating ? null : DROP_INTERVAL);
+  useInterval(drop, isGameOver || isAnimating ? null : dropInterval);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (isGameOver || isAnimating) return;
-    // ... The rest of key handling logic is unchanged ...
     const key = e.key.toLowerCase();
     if (key === 'a' || key === 'arrowleft') movePiece([-1, 0, 0]);
     if (key === 'd' || key === 'arrowright') movePiece([1, 0, 0]);
@@ -238,14 +282,24 @@ const GameContainer = () => {
   }, [handleKeyDown]);
 
   return (
-    <div>
-      {isGameOver && <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'red', fontSize: '3em', zIndex: 100, textShadow: '2px 2px 4px #000'}}>GAME OVER</div>}
-      <div style={{color: 'white', position: 'absolute', top: 20, left: 20, zIndex: 100, fontSize: '1.5em', fontFamily: 'monospace'}}>Score: {score}</div>
-      <GameBoard
-        gridState={grid}
-        currentPiece={currentPiece}
-        clearingBlocks={clearingBlocks}
+    <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
+      {/* UI Overlays */}
+      {/* highlight-start */}
+      <StatsDisplay 
+        score={score} 
+        speedLevel={speedLevel} 
+        time={timePassed} 
+        cubesPlayed={cubesPlayed} 
       />
+      {/* highlight-end */}
+      {isGameOver && <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'red', fontSize: '3em', zIndex: 100, textShadow: '2px 2px 4px #000'}}>GAME OVER</div>}
+
+      {/* Main Game Layout */}
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', gap: '20px' }}>
+        <LevelIndicator levelStatus={levelStatus} />
+        <GameBoard gridState={grid} currentPiece={currentPiece} clearingBlocks={clearingBlocks} />
+        <div style={{width: '55px'}}></div>
+      </div>
     </div>
   );
 };

@@ -2,20 +2,19 @@ import React, { useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Edges } from '@react-three/drei';
 import * as THREE from 'three';
-// highlight-start
-import { useSpring, animated } from '@react-spring/three'; // Import react-spring
-// highlight-end
+import { useSpring, animated } from '@react-spring/three';
 import { GridDisplay } from './GridDisplay';
+import ProjectionHighlights from './ProjectionHighlights'; // <-- 1. IMPORT
 import { type Shape, type Grid, CELL_SIZE, GRID_SIZE } from './GameContainer';
 
-// --- COLOR PALETTE (remains the same) ---
-const PALETTE = [
+export const PALETTE = [
+  // ... palette is unchanged
   '#DC322F', '#859900', '#268BD2', '#D33682',
   '#2AA198', '#CB4B16', '#6C71C4', '#B58900',
 ];
 const FALLING_PIECE_COLOR = '#00ff64';
 
-// --- A NEW, UNIFIED, ANIMATED BLOCK COMPONENT ---
+// Block component remains the same...
 interface BlockProps {
   position: THREE.Vector3;
   color: string;
@@ -24,47 +23,42 @@ interface BlockProps {
 }
 
 const Block = ({ position, color, isFalling, isClearing }: BlockProps) => {
-  // useSpring hook to manage the animated properties of the block
-  const [spring, api] = useSpring(() => ({
+    // ... no changes to Block component
+    const [spring, api] = useSpring(() => ({
     scale: [1, 1, 1],
     position: position.toArray(),
-    config: { mass: 0.1, tension: 1000, friction: 10},
+    config: { mass: 1, tension: 300, friction: 30 },
   }));
 
-  // This effect runs when the block's props change
   useEffect(() => {
-    // If the block is marked for clearing, trigger the "disappear" animation
     if (isClearing) {
       api.start({ to: { scale: [0, 0, 0] } });
     } else {
-      // Otherwise, animate to its new position and ensure scale is normal
       api.start({ to: { position: position.toArray(), scale: [1, 1, 1] } });
     }
   }, [position, isClearing, api]);
 
   return (
-    // 'animated.mesh' is a special component from react-spring that can accept animated values
     <animated.mesh position={spring.position as any} scale={spring.scale as any}>
       <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
       {isFalling ? (
         <>
-          {/* For falling blocks, render invisible mesh with visible edges */}
           <meshBasicMaterial transparent opacity={0} />
           <Edges scale={1} color={color} linewidth={2} />
         </>
       ) : (
-        // For static blocks, render a solid material
         <meshStandardMaterial color={color} />
       )}
     </animated.mesh>
   );
 };
 
+
 // --- GAMEBOARD COMPONENT ---
 interface GameBoardProps {
   gridState: Grid;
   currentPiece: Shape | null;
-  clearingBlocks: Shape; // New prop to render blocks that are animating out
+  clearingBlocks: Shape;
 }
 
 const GameBoard = ({ gridState, currentPiece, clearingBlocks }: GameBoardProps) => {
@@ -81,10 +75,23 @@ const GameBoard = ({ gridState, currentPiece, clearingBlocks }: GameBoardProps) 
       <Canvas camera={{ position: [0, 0, 450], fov: 60 }}>
         <ambientLight intensity={0.6} />
         <directionalLight position={[100, 200, 150]} intensity={0.8} />
-        <OrbitControls />
+        
+        <OrbitControls
+          enableRotate={false}
+          enablePan={false}
+          enableZoom={true}
+          minDistance={200}
+          maxDistance={1000}
+        />
+
         <group rotation={[-Math.PI / 2, 0, 0]}>
           <GridDisplay />
           
+          {/* highlight-start */}
+          {/* 2. RENDER THE HIGHLIGHTS COMPONENT */}
+          <ProjectionHighlights currentPiece={currentPiece} />
+          {/* highlight-end */}
+
           {/* Render the static, placed blocks */}
           {gridState.map((row, x) =>
             row.map((col, y) =>
