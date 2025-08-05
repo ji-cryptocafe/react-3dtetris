@@ -54,7 +54,8 @@ const GameContainer = () => {
   }, []);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: number;
+
     if (startTime && !isGameOver) {
       timer = setInterval(() => {
         setTimePassed(Date.now() - startTime);
