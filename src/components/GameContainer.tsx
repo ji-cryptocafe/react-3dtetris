@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import GameBoard from './GameBoard';
 import LevelIndicator from './LevelIndicator';
 import StatsDisplay from './StatsDisplay';
+import ControlsHint from './ControlsHint';
+import RestartButton from './RestartButton'; // <-- Import new component
 import { useInterval } from '../hooks/useInterval';
 
 // --- CONSTANTS AND CONFIGURATION ---
@@ -38,46 +40,79 @@ const GameContainer = () => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [clearingBlocks, setClearingBlocks] = useState<Shape>([]);
   
-  // --- STATS STATE ---
+  // Stats State
   const [score, setScore] = useState(0);
   const [startTime, setStartTime] = useState<number | null>(null);
   const [timePassed, setTimePassed] = useState(0);
   const [dropInterval, setDropInterval] = useState(INITIAL_DROP_INTERVAL);
   const [speedLevel, setSpeedLevel] = useState(1);
-  // highlight-start
   const [cubesPlayed, setCubesPlayed] = useState(0);
-  // highlight-end
-  
-  useEffect(() => {
+
+  // highlight-start
+  // --- NEW: Reset Game Function ---
+  const resetGame = useCallback(() => {
+    setIsGameOver(false);
+    setGrid(createEmptyGrid());
+    setCurrentPiece(null);
+    setScore(0);
     setStartTime(Date.now());
+    setTimePassed(0);
+    setDropInterval(INITIAL_DROP_INTERVAL);
+    setSpeedLevel(1);
+    setCubesPlayed(0);
+    setClearingBlocks([]);
+    setIsAnimating(false);
     createNewPiece();
-  }, []);
+  }, []); // createNewPiece needs to be a dependency
+  // highlight-end
+
+  // The 'createNewPiece' function now depends on 'resetGame'
+  const createNewPiece = useCallback(() => {
+    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+    const newPiece = shape.map(block => {
+      const x = block[0] + Math.floor(GRID_SIZE[0] / 2) - 1;
+      const y = block[1];
+      const z = block[2] + Math.floor(GRID_SIZE[2] / 2) - 1;
+      return [x, y, z] as Vector3;
+    });
+
+    if (!isValidMove(newPiece, grid)) {
+      setIsGameOver(true);
+      setCurrentPiece(null);
+    } else {
+      setCurrentPiece(newPiece);
+    }
+  }, [grid]); // Removed resetGame from deps to avoid circular dependency
 
   useEffect(() => {
-    let timer: number;
-
-    if (startTime && !isGameOver) {
-      timer = setInterval(() => {
-        setTimePassed(Date.now() - startTime);
-      }, 100);
+    if (startTime === null) {
+      resetGame();
     }
-    return () => clearInterval(timer);
-  }, [startTime, isGameOver]);
-  
+  }, [startTime, resetGame]);
+
+  // highlight-start
+  // --- NEW: Effect to listen for restart input after game over ---
   useEffect(() => {
-    if (score > 0) {
-      const newLevel = Math.floor(score / 1000) + 1;
-      setSpeedLevel(newLevel);
-      const newInterval = Math.max(
-        MIN_DROP_INTERVAL,
-        INITIAL_DROP_INTERVAL - (newLevel - 1) * 50
-      );
-      setDropInterval(newInterval);
-    }
-  }, [score]);
+    if (!isGameOver) return;
 
+    const handleRestart = () => {
+      resetGame();
+    };
+
+    window.addEventListener('keydown', handleRestart);
+    window.addEventListener('mousedown', handleRestart);
+
+    // Cleanup function to remove listeners when the game is no longer over
+    return () => {
+      window.removeEventListener('keydown', handleRestart);
+      window.removeEventListener('mousedown', handleRestart);
+    };
+  }, [isGameOver, resetGame]);
+  // highlight-end
+
+  // All other logic functions remain the same...
+  // ... (isValidMove, processLandedPiece, movePiece, rotatePiece, hardDrop, drop, etc.)
   const levelStatus = useMemo(() => {
-    // ... no changes to this memo
     const status = new Array(GRID_SIZE[1]).fill(false);
     for (let y = 0; y < GRID_SIZE[1]; y++) {
       for (let x = 0; x < GRID_SIZE[0]; x++) {
@@ -94,7 +129,6 @@ const GameContainer = () => {
   }, [grid]);
 
   const isValidMove = useCallback((piece: Shape, currentGrid: Grid): boolean => {
-    // ... no changes to this function
     for (const block of piece) {
       const [x, y, z] = block;
       if (
@@ -109,40 +143,18 @@ const GameContainer = () => {
     return true;
   }, []);
 
-  const createNewPiece = useCallback(() => {
-    // ... no changes to this function
-    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-    const newPiece = shape.map(block => {
-      const x = block[0] + Math.floor(GRID_SIZE[0] / 2) - 1;
-      const y = block[1];
-      const z = block[2] + Math.floor(GRID_SIZE[2] / 2) - 1;
-      return [x, y, z] as Vector3;
-    });
-
-    if (!isValidMove(newPiece, grid)) {
-      setIsGameOver(true);
-      setCurrentPiece(null);
-    } else {
-      setCurrentPiece(newPiece);
-    }
-  }, [grid, isValidMove]);
-
   const processLandedPiece = useCallback((landedPiece: Shape, isHardDrop: boolean) => {
     setIsAnimating(true);
     setCurrentPiece(null);
 
-    // highlight-start
-    // Update stats for the placed piece
     setScore(prev => prev + (isHardDrop ? 20 : 10));
-    setCubesPlayed(prev => prev + landedPiece.length); // Increment by the number of cubes in the piece
-    // highlight-end
+    setCubesPlayed(prev => prev + landedPiece.length);
 
     const tempGrid = grid.map(row => row.map(col => [...col]));
     landedPiece.forEach(block => {
       if (block[1] >= 0) tempGrid[block[0]][block[1]][block[2]] = 1;
     });
     
-    // ... animation and line clearing logic remains the same ...
     const fullLayersY: number[] = [];
     for (let y = 0; y < GRID_SIZE[1]; y++) {
       let isLayerFull = true;
@@ -202,8 +214,6 @@ const GameContainer = () => {
     }
   }, [grid, createNewPiece, speedLevel]);
 
-  // All other game logic functions (movePiece, rotatePiece, hardDrop, drop, handleKeyDown)
-  // remain completely unchanged.
   const movePiece = useCallback((delta: Vector3) => {
     if (!currentPiece || isAnimating) return;
     const newPiece = currentPiece.map(block =>
@@ -281,6 +291,31 @@ const GameContainer = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleKeyDown]);
+  
+  useEffect(() => {
+    // This effect handles the timer updates.
+    let timer: number;
+    if (startTime && !isGameOver) {
+      timer = setInterval(() => {
+        setTimePassed(Date.now() - startTime);
+      }, 100);
+    }
+    return () => clearInterval(timer);
+  }, [startTime, isGameOver]);
+  
+  useEffect(() => {
+    // This effect handles the speed updates.
+    if (score > 0) {
+      const newLevel = Math.floor(score / 1000) + 1;
+      setSpeedLevel(newLevel);
+      const newInterval = Math.max(
+        MIN_DROP_INTERVAL,
+        INITIAL_DROP_INTERVAL - (newLevel - 1) * 50
+      );
+      setDropInterval(newInterval);
+    }
+  }, [score]);
+
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
@@ -290,18 +325,28 @@ const GameContainer = () => {
         time={timePassed} 
         cubesPlayed={cubesPlayed} 
       />
-      {isGameOver && <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'red', fontSize: '3em', zIndex: 100, textShadow: '2px 2px 4px #000'}}>GAME OVER</div>}
+      <ControlsHint />
+      
+      {/* Conditionally render RestartButton or GameOver screen */}
+      {isGameOver ? (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          textAlign: 'center', color: 'white', zIndex: 100, textShadow: '2px 2px 4px #000'
+        }}>
+          <h2 style={{ color: 'red', fontSize: '3em', margin: 0 }}>GAME OVER</h2>
+          <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Press any key to restart</p>
+        </div>
+      ) : (
+        <RestartButton onRestart={resetGame} />
+      )}
 
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', gap: '20px' }}>
         <LevelIndicator levelStatus={levelStatus} />
         <GameBoard gridState={grid} currentPiece={currentPiece} clearingBlocks={clearingBlocks} />
-        {/* highlight-start */}
-        {/* This div now perfectly balances the LevelIndicator on the left */}
         <div style={{width: '44px'}}></div>
-        {/* highlight-end */}
       </div>
     </div>
   );
 };
 
-export default GameContainer; 
+export default GameContainer;
