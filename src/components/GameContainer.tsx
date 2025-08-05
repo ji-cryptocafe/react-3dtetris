@@ -3,7 +3,8 @@ import GameBoard from './GameBoard';
 import LevelIndicator from './LevelIndicator';
 import StatsDisplay from './StatsDisplay';
 import ControlsHint from './ControlsHint';
-import RestartButton from './RestartButton'; // <-- Import new component
+import RestartButton from './RestartButton';
+import NextPiecePreview from './NextPiecePreview'; // <-- Import new component
 import { useInterval } from '../hooks/useInterval';
 
 // --- CONSTANTS AND CONFIGURATION ---
@@ -32,10 +33,16 @@ const createEmptyGrid = (): Grid =>
     Array.from({ length: GRID_SIZE[1] }, () => Array(GRID_SIZE[2]).fill(0))
   );
 
+// Helper to generate a new random piece shape
+const generateRandomPiece = (): Shape => {
+    return SHAPES[Math.floor(Math.random() * SHAPES.length)];
+}
+
 // --- MAIN COMPONENT ---
 const GameContainer = () => {
   const [grid, setGrid] = useState<Grid>(() => createEmptyGrid());
   const [currentPiece, setCurrentPiece] = useState<Shape | null>(null);
+  const [nextPiece, setNextPiece] = useState<Shape | null>(null); // <-- NEW STATE
   const [isGameOver, setIsGameOver] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [clearingBlocks, setClearingBlocks] = useState<Shape>([]);
@@ -48,12 +55,48 @@ const GameContainer = () => {
   const [speedLevel, setSpeedLevel] = useState(1);
   const [cubesPlayed, setCubesPlayed] = useState(0);
 
-  // highlight-start
-  // --- NEW: Reset Game Function ---
+  // --- UPDATED GAME LOGIC ---
+  const isValidMove = useCallback((piece: Shape, currentGrid: Grid): boolean => {
+    // ... no changes here
+    for (const block of piece) {
+      const [x, y, z] = block;
+      if (
+        x < 0 || x >= GRID_SIZE[0] ||
+        y >= GRID_SIZE[1] ||
+        z < 0 || z >= GRID_SIZE[2] ||
+        (y >= 0 && currentGrid[x][y][z] !== 0)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }, []);
+
+  const createNewPiece = useCallback(() => {
+    // Promote nextPiece to currentPiece
+    const pieceToSpawn = nextPiece ? nextPiece : generateRandomPiece();
+    const newCurrentPiece = pieceToSpawn.map(block => {
+      const x = block[0] + Math.floor(GRID_SIZE[0] / 2) - 1;
+      const y = block[1];
+      const z = block[2] + Math.floor(GRID_SIZE[2] / 2) - 1;
+      return [x, y, z] as Vector3;
+    });
+
+    if (!isValidMove(newCurrentPiece, grid)) {
+      setIsGameOver(true);
+      setCurrentPiece(null);
+    } else {
+      setCurrentPiece(newCurrentPiece);
+    }
+    
+    // Generate the next piece
+    setNextPiece(generateRandomPiece());
+
+  }, [grid, isValidMove, nextPiece]);
+
   const resetGame = useCallback(() => {
     setIsGameOver(false);
     setGrid(createEmptyGrid());
-    setCurrentPiece(null);
     setScore(0);
     setStartTime(Date.now());
     setTimePassed(0);
@@ -62,27 +105,21 @@ const GameContainer = () => {
     setCubesPlayed(0);
     setClearingBlocks([]);
     setIsAnimating(false);
-    createNewPiece();
-  }, []); // createNewPiece needs to be a dependency
-  // highlight-end
+    
+    // Initialize the first two pieces
+    const firstPiece = generateRandomPiece();
+    const secondPiece = generateRandomPiece();
+    
+    const initialCurrentPiece = firstPiece.map(block => [
+        block[0] + Math.floor(GRID_SIZE[0] / 2) - 1,
+        block[1],
+        block[2] + Math.floor(GRID_SIZE[2] / 2) - 1
+    ] as Vector3);
+    
+    setCurrentPiece(initialCurrentPiece);
+    setNextPiece(secondPiece);
 
-  // The 'createNewPiece' function now depends on 'resetGame'
-  const createNewPiece = useCallback(() => {
-    const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-    const newPiece = shape.map(block => {
-      const x = block[0] + Math.floor(GRID_SIZE[0] / 2) - 1;
-      const y = block[1];
-      const z = block[2] + Math.floor(GRID_SIZE[2] / 2) - 1;
-      return [x, y, z] as Vector3;
-    });
-
-    if (!isValidMove(newPiece, grid)) {
-      setIsGameOver(true);
-      setCurrentPiece(null);
-    } else {
-      setCurrentPiece(newPiece);
-    }
-  }, [grid]); // Removed resetGame from deps to avoid circular dependency
+  }, []);
 
   useEffect(() => {
     if (startTime === null) {
@@ -90,28 +127,18 @@ const GameContainer = () => {
     }
   }, [startTime, resetGame]);
 
-  // highlight-start
-  // --- NEW: Effect to listen for restart input after game over ---
   useEffect(() => {
     if (!isGameOver) return;
-
-    const handleRestart = () => {
-      resetGame();
-    };
-
+    const handleRestart = () => resetGame();
     window.addEventListener('keydown', handleRestart);
     window.addEventListener('mousedown', handleRestart);
-
-    // Cleanup function to remove listeners when the game is no longer over
     return () => {
       window.removeEventListener('keydown', handleRestart);
       window.removeEventListener('mousedown', handleRestart);
     };
   }, [isGameOver, resetGame]);
-  // highlight-end
-
-  // All other logic functions remain the same...
-  // ... (isValidMove, processLandedPiece, movePiece, rotatePiece, hardDrop, drop, etc.)
+  
+  // All other game logic functions (processLandedPiece, movePiece, etc.) remain the same.
   const levelStatus = useMemo(() => {
     const status = new Array(GRID_SIZE[1]).fill(false);
     for (let y = 0; y < GRID_SIZE[1]; y++) {
@@ -127,21 +154,6 @@ const GameContainer = () => {
     }
     return status;
   }, [grid]);
-
-  const isValidMove = useCallback((piece: Shape, currentGrid: Grid): boolean => {
-    for (const block of piece) {
-      const [x, y, z] = block;
-      if (
-        x < 0 || x >= GRID_SIZE[0] ||
-        y >= GRID_SIZE[1] ||
-        z < 0 || z >= GRID_SIZE[2] ||
-        (y >= 0 && currentGrid[x][y][z] !== 0)
-      ) {
-        return false;
-      }
-    }
-    return true;
-  }, []);
 
   const processLandedPiece = useCallback((landedPiece: Shape, isHardDrop: boolean) => {
     setIsAnimating(true);
@@ -284,7 +296,7 @@ const GameContainer = () => {
       hardDrop();
     }
   }, [isGameOver, isAnimating, movePiece, rotatePiece, hardDrop]);
-
+  
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -293,7 +305,6 @@ const GameContainer = () => {
   }, [handleKeyDown]);
   
   useEffect(() => {
-    // This effect handles the timer updates.
     let timer: number;
     if (startTime && !isGameOver) {
       timer = setInterval(() => {
@@ -304,7 +315,6 @@ const GameContainer = () => {
   }, [startTime, isGameOver]);
   
   useEffect(() => {
-    // This effect handles the speed updates.
     if (score > 0) {
       const newLevel = Math.floor(score / 1000) + 1;
       setSpeedLevel(newLevel);
@@ -326,8 +336,11 @@ const GameContainer = () => {
         cubesPlayed={cubesPlayed} 
       />
       <ControlsHint />
+      {/* highlight-start */}
+      {/* The NextPiecePreview is now a self-positioning overlay */}
+      <NextPiecePreview nextPiece={nextPiece} />
+      {/* highlight-end */}
       
-      {/* Conditionally render RestartButton or GameOver screen */}
       {isGameOver ? (
         <div style={{
           position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
@@ -340,9 +353,13 @@ const GameContainer = () => {
         <RestartButton onRestart={resetGame} />
       )}
 
+      {/* --- SIMPLIFIED AND RE-CENTERED LAYOUT --- */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', gap: '20px' }}>
-        <LevelIndicator levelStatus={levelStatus} />
+        <div style={{width: '44px', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+            <LevelIndicator levelStatus={levelStatus} />
+        </div>
         <GameBoard gridState={grid} currentPiece={currentPiece} clearingBlocks={clearingBlocks} />
+        {/* The right-side placeholder is now identical to the left for perfect centering */}
         <div style={{width: '44px'}}></div>
       </div>
     </div>
