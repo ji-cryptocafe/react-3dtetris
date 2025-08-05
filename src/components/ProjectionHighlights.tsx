@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import * as THREE from 'three';
 import { type Shape, GRID_SIZE, CELL_SIZE } from './GameContainer';
 

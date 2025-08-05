@@ -1,4 +1,3 @@
-import React from 'react';
 // We need the same color palette as the game board to match colors
 import { PALETTE } from './GameBoard'; 
 
