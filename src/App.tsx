@@ -2,13 +2,9 @@ import './App.css';
 import GameContainer from './components/GameContainer';
 
 function App() {
+  // We just need the GameContainer, which handles its own full-screen layout.
   return (
-    <div className="App">
-      <header className="App-header">
-        <h2>3D Tetris Battle</h2>
-      </header>
-      <GameContainer />
-    </div>
+    <GameContainer />
   );
 }
 

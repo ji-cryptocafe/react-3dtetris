@@ -284,25 +284,24 @@ const GameContainer = () => {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh' }}>
-      {/* UI Overlays */}
-      {/* highlight-start */}
       <StatsDisplay 
         score={score} 
         speedLevel={speedLevel} 
         time={timePassed} 
         cubesPlayed={cubesPlayed} 
       />
-      {/* highlight-end */}
       {isGameOver && <div style={{position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', color: 'red', fontSize: '3em', zIndex: 100, textShadow: '2px 2px 4px #000'}}>GAME OVER</div>}
 
-      {/* Main Game Layout */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', gap: '20px' }}>
         <LevelIndicator levelStatus={levelStatus} />
         <GameBoard gridState={grid} currentPiece={currentPiece} clearingBlocks={clearingBlocks} />
-        <div style={{width: '55px'}}></div>
+        {/* highlight-start */}
+        {/* This div now perfectly balances the LevelIndicator on the left */}
+        <div style={{width: '44px'}}></div>
+        {/* highlight-end */}
       </div>
     </div>
   );
 };
 
-export default GameContainer;
+export default GameContainer; 
