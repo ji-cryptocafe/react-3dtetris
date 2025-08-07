@@ -7,6 +7,7 @@ import { GridDisplay } from './GridDisplay';
 import ProjectionHighlights from './ProjectionHighlights';
 import FallingPiece from './FallingPiece'; // The component that now handles falling piece rendering
 import { type Shape, type Grid, CELL_SIZE, GRID_SIZE } from './GameContainer';
+import ParticleEffects, { type GameAction } from './ParticleEffects'; // <-- 1. IMPORT
 
 // This palette needs to be exported so other components (like LevelIndicator) can use it.
 export const PALETTE = [
@@ -55,9 +56,10 @@ interface GameBoardProps {
   gridState: Grid;
   currentPiece: Shape | null;
   clearingBlocks: Shape;
+  lastAction: GameAction;
 }
 
-const GameBoard = ({ gridState, currentPiece, clearingBlocks }: GameBoardProps) => {
+const GameBoard = ({ gridState, currentPiece, clearingBlocks, lastAction }: GameBoardProps) => {
   // Helper function to convert grid coordinates to 3D world coordinates
   const getWorldPosition = (x: number, y: number, z: number): THREE.Vector3 => {
     return new THREE.Vector3(
@@ -94,6 +96,7 @@ const GameBoard = ({ gridState, currentPiece, clearingBlocks }: GameBoardProps) 
 
           {/* Renders the currently falling piece using the new advanced logic */}
           <FallingPiece piece={currentPiece} />
+          
           
           {/* Renders the static, placed blocks from the grid state */}
           {gridState.map((row, x) =>
