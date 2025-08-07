@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import GameBoard from './GameBoard';
 import LevelIndicator from './LevelIndicator';
 import StatsDisplay from './StatsDisplay';
 import ControlsHint from './ControlsHint';
 import RestartButton from './RestartButton';
-import NextPiecePreview from './NextPiecePreview'; // <-- Import new component
+import NextPiecePreview from './NextPiecePreview';
 import { useInterval } from '../hooks/useInterval';
 
 // --- CONSTANTS AND CONFIGURATION ---
@@ -13,19 +13,36 @@ export const CELL_SIZE = 30;
 const INITIAL_DROP_INTERVAL = 1000;
 const MIN_DROP_INTERVAL = 100;
 const ANIMATION_DURATION = 250;
+// --- NEW: Difficulty thresholds ---
+const TIER_2_UNLOCK_LEVEL = 3;
+const TIER_3_UNLOCK_LEVEL = 6;
 
 export type Vector3 = [number, number, number];
 export type Shape = Vector3[];
 export type Grid = (number | string)[][][];
+type ShapeDefinition = Vector3[];
 
-const SHAPES: Shape[] = [
-  // ... shapes are unchanged
-  [[0,0,0],[1,0,0],[0,0,1],[1,0,1],[0,1,0],[1,1,0],[0,1,1],[1,1,1]],
-  [[0,0,0],[0,1,0],[0,2,0],[0,3,0]],
-  [[0,0,0],[0,1,0],[0,2,0],[1,2,0]],
-  [[0,0,0],[1,0,0],[2,0,0],[1,1,0]],
-  [[0,0,0],[1,0,0],[1,1,0],[2,1,0]],
-  [[0,0,0],[1,0,0],[0,1,0],[0,0,1]],
+// --- SHAPE DEFINITIONS BY DIFFICULTY (from Step 1) ---
+const SHAPES_TIER_1: ShapeDefinition[] = [
+  [[0,0,0], [0,1,0], [0,2,0], [0,3,0]],
+  [[0,0,0], [0,1,0], [0,2,0], [1,2,0]],
+  [[0,0,0], [1,0,0], [2,0,0], [1,1,0]],
+  [[0,0,0], [1,0,0], [1,1,0], [2,1,0]],
+  [[0,0,0], [1,0,0], [0,0,1], [1,0,1]],
+  [[0,0,0], [1,0,0], [1,1,0], [2,1,0]],
+];
+const SHAPES_TIER_2: ShapeDefinition[] = [
+  [[0,0,0], [1,0,0], [0,0,1], [1,0,1], [0,1,0], [1,1,0], [0,1,1], [1,1,1]],
+  [[0,0,0], [1,0,0], [0,1,0], [0,0,1]],
+  [[0,0,0], [1,0,0], [0,0,1], [1,0,1], [0,1,0]],
+  [[0,0,0], [1,0,0], [2,0,0], [3,0,0], [0,1,0]],
+  [[0,0,0], [1,0,0], [2,0,0], [3,0,0], [1,1,0]],
+  [[0,0,0], [0,0,1], [1,0,1], [2,0,1], [2,0,0]],
+];
+const SHAPES_TIER_3: ShapeDefinition[] = [
+  [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]],
+  [[0,0,0], [1,0,0], [1,1,0], [1,1,1], [2,1,1]],
+  [[0,0,0], [1,0,0], [1,1,0], [1,1,1]],
 ];
 
 const createEmptyGrid = (): Grid =>
@@ -33,16 +50,11 @@ const createEmptyGrid = (): Grid =>
     Array.from({ length: GRID_SIZE[1] }, () => Array(GRID_SIZE[2]).fill(0))
   );
 
-// Helper to generate a new random piece shape
-const generateRandomPiece = (): Shape => {
-    return SHAPES[Math.floor(Math.random() * SHAPES.length)];
-}
-
 // --- MAIN COMPONENT ---
 const GameContainer = () => {
   const [grid, setGrid] = useState<Grid>(() => createEmptyGrid());
   const [currentPiece, setCurrentPiece] = useState<Shape | null>(null);
-  const [nextPiece, setNextPiece] = useState<Shape | null>(null); // <-- NEW STATE
+  const [nextPiece, setNextPiece] = useState<Shape | null>(null);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
   const [clearingBlocks, setClearingBlocks] = useState<Shape>([]);
@@ -55,7 +67,41 @@ const GameContainer = () => {
   const [speedLevel, setSpeedLevel] = useState(1);
   const [cubesPlayed, setCubesPlayed] = useState(0);
 
-  // --- UPDATED GAME LOGIC ---
+  // highlight-start
+  // --- NEW: State for available shapes ---
+  const [availableShapes, setAvailableShapes] = useState<ShapeDefinition[]>(SHAPES_TIER_1);
+  // highlight-end
+
+  // Helper to generate a new random piece from the currently available pool
+  const generateRandomPiece = useCallback((): Shape => {
+    return availableShapes[Math.floor(Math.random() * availableShapes.length)];
+  }, [availableShapes]);
+
+  // --- UPDATED: Speed and Difficulty Progression ---
+  useEffect(() => {
+    if (score > 0) {
+      const newLevel = Math.floor(score / 1000) + 1;
+      if (newLevel !== speedLevel) {
+        setSpeedLevel(newLevel);
+        const newInterval = Math.max(
+          MIN_DROP_INTERVAL,
+          INITIAL_DROP_INTERVAL - (newLevel - 1) * 50
+        );
+        setDropInterval(newInterval);
+
+        // --- UNLOCK NEW SHAPES ---
+        if (newLevel >= TIER_3_UNLOCK_LEVEL) {
+          setAvailableShapes([...SHAPES_TIER_1, ...SHAPES_TIER_2, ...SHAPES_TIER_3]);
+        } else if (newLevel >= TIER_2_UNLOCK_LEVEL) {
+          setAvailableShapes([...SHAPES_TIER_1, ...SHAPES_TIER_2]);
+        }
+      }
+    }
+  }, [score, speedLevel]);
+
+  // --- All other game logic functions (isValidMove, etc.) ---
+  // --- They will automatically use the updated `generateRandomPiece` function. ---
+  
   const isValidMove = useCallback((piece: Shape, currentGrid: Grid): boolean => {
     // ... no changes here
     for (const block of piece) {
@@ -73,7 +119,6 @@ const GameContainer = () => {
   }, []);
 
   const createNewPiece = useCallback(() => {
-    // Promote nextPiece to currentPiece
     const pieceToSpawn = nextPiece ? nextPiece : generateRandomPiece();
     const newCurrentPiece = pieceToSpawn.map(block => {
       const x = block[0] + Math.floor(GRID_SIZE[0] / 2) - 1;
@@ -89,10 +134,9 @@ const GameContainer = () => {
       setCurrentPiece(newCurrentPiece);
     }
     
-    // Generate the next piece
     setNextPiece(generateRandomPiece());
 
-  }, [grid, isValidMove, nextPiece]);
+  }, [grid, isValidMove, nextPiece, generateRandomPiece]);
 
   const resetGame = useCallback(() => {
     setIsGameOver(false);
@@ -105,10 +149,11 @@ const GameContainer = () => {
     setCubesPlayed(0);
     setClearingBlocks([]);
     setIsAnimating(false);
+    // --- RESET SHAPES TO TIER 1 ---
+    setAvailableShapes(SHAPES_TIER_1);
     
-    // Initialize the first two pieces
-    const firstPiece = generateRandomPiece();
-    const secondPiece = generateRandomPiece();
+    const firstPiece = SHAPES_TIER_1[Math.floor(Math.random() * SHAPES_TIER_1.length)];
+    const secondPiece = SHAPES_TIER_1[Math.floor(Math.random() * SHAPES_TIER_1.length)];
     
     const initialCurrentPiece = firstPiece.map(block => [
         block[0] + Math.floor(GRID_SIZE[0] / 2) - 1,
@@ -121,6 +166,7 @@ const GameContainer = () => {
 
   }, []);
 
+  // ... rest of the component remains unchanged ...
   useEffect(() => {
     if (startTime === null) {
       resetGame();
@@ -137,8 +183,7 @@ const GameContainer = () => {
       window.removeEventListener('mousedown', handleRestart);
     };
   }, [isGameOver, resetGame]);
-  
-  // All other game logic functions (processLandedPiece, movePiece, etc.) remain the same.
+
   const levelStatus = useMemo(() => {
     const status = new Array(GRID_SIZE[1]).fill(false);
     for (let y = 0; y < GRID_SIZE[1]; y++) {
@@ -303,28 +348,6 @@ const GameContainer = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [handleKeyDown]);
-  
-  useEffect(() => {
-    let timer: number;
-    if (startTime && !isGameOver) {
-      timer = setInterval(() => {
-        setTimePassed(Date.now() - startTime);
-      }, 100);
-    }
-    return () => clearInterval(timer);
-  }, [startTime, isGameOver]);
-  
-  useEffect(() => {
-    if (score > 0) {
-      const newLevel = Math.floor(score / 1000) + 1;
-      setSpeedLevel(newLevel);
-      const newInterval = Math.max(
-        MIN_DROP_INTERVAL,
-        INITIAL_DROP_INTERVAL - (newLevel - 1) * 50
-      );
-      setDropInterval(newInterval);
-    }
-  }, [score]);
 
 
   return (
@@ -336,10 +359,7 @@ const GameContainer = () => {
         cubesPlayed={cubesPlayed} 
       />
       <ControlsHint />
-      {/* highlight-start */}
-      {/* The NextPiecePreview is now a self-positioning overlay */}
       <NextPiecePreview nextPiece={nextPiece} />
-      {/* highlight-end */}
       
       {isGameOver ? (
         <div style={{
@@ -353,13 +373,11 @@ const GameContainer = () => {
         <RestartButton onRestart={resetGame} />
       )}
 
-      {/* --- SIMPLIFIED AND RE-CENTERED LAYOUT --- */}
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', gap: '20px' }}>
         <div style={{width: '44px', display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
             <LevelIndicator levelStatus={levelStatus} />
         </div>
         <GameBoard gridState={grid} currentPiece={currentPiece} clearingBlocks={clearingBlocks} />
-        {/* The right-side placeholder is now identical to the left for perfect centering */}
         <div style={{width: '44px'}}></div>
       </div>
     </div>
