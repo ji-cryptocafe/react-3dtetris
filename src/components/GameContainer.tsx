@@ -8,9 +8,9 @@ import NextPiecePreview from './NextPiecePreview';
 import { useInterval } from '../hooks/useInterval';
 
 // --- CONSTANTS AND CONFIGURATION ---
-export const GRID_SIZE: [number, number, number] = [10, 20, 10];
+export const GRID_SIZE: [number, number, number] = [10, 15, 10];
 export const CELL_SIZE = 30;
-const INITIAL_DROP_INTERVAL = 1000;
+const INITIAL_DROP_INTERVAL = 1500;
 const MIN_DROP_INTERVAL = 100;
 const ANIMATION_DURATION = 250;
 // --- NEW: Difficulty thresholds ---

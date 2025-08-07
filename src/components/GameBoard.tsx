@@ -69,7 +69,7 @@ const GameBoard = ({ gridState, currentPiece, clearingBlocks }: GameBoardProps) 
 
   return (
     <div style={{ height: '80vh', width: '80vw', margin: 'auto', background: '#282c34' }}>
-      <Canvas camera={{ position: [0, 0, 450], fov: 60 }}>
+      <Canvas camera={{ position: [0, 0, 450], fov: 70 }}>
         {/* Scene lighting */}
         <ambientLight intensity={0.6} />
         <directionalLight position={[100, 200, 150]} intensity={0.8} />
