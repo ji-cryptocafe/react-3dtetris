@@ -1,72 +1,110 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { Edges } from '@react-three/drei';
-// This utility is crucial for merging geometries
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { type Shape, GRID_SIZE, CELL_SIZE } from './GameContainer';
+import { DIRS, edgeKey } from '../utils/edgeHash';
 
 const FALLING_PIECE_COLOR = '#00ff64';
+// highlight-start
+// --- THIS IS OUR NEW "LINE WIDTH" ---
+// We control the thickness by changing the radius of the tube.
+const LINE_RADIUS = 0.4; 
+// highlight-end
 
-// Helper to convert grid coordinates to 3D world coordinates
-// This is needed here to correctly position the geometries before merging
-const getWorldPosition = (x: number, y: number, z: number): THREE.Vector3 => {
-  const [gridX, gridY, gridZ] = GRID_SIZE;
-  return new THREE.Vector3(
-    (x - gridX / 2) * CELL_SIZE + CELL_SIZE / 2,
-    (y - gridY / 2) * CELL_SIZE + CELL_SIZE / 2,
-    (z - gridZ / 2) * CELL_SIZE + CELL_SIZE / 2
+// --- A NEW, DEDICATED COMPONENT TO RENDER ONE THICK LINE (TUBE) ---
+interface TubeProps {
+  start: THREE.Vector3;
+  end: THREE.Vector3;
+}
+const Tube = ({ start, end }: TubeProps) => {
+  // Create a 3D path (a curve) from the start to the end point
+  const path = useMemo(() => new THREE.LineCurve3(start, end), [start, end]);
+
+  return (
+    <mesh>
+      {/* Create a tube geometry that follows the path */}
+      <tubeGeometry args={[
+        path,       // The path to follow
+        1,          // Segments along the tube's length (1 is enough for a straight line)
+        LINE_RADIUS,// The radius (thickness) of the tube
+        8,          // The number of sides on the tube (8 looks like a smooth cylinder)
+        false       // Not a closed loop
+      ]} />
+      <meshStandardMaterial
+        color={FALLING_PIECE_COLOR}
+        emissive={FALLING_PIECE_COLOR} // Make it glow
+        emissiveIntensity={0.5}
+      />
+    </mesh>
   );
 };
 
-interface FallingPieceProps {
-  piece: Shape | null;
+
+// --- HOOK 1: useEdgeCounts (no changes here) ---
+function useEdgeCounts(cubes: Shape | null) {
+  return useMemo(() => {
+    if (!cubes) return new Map<string, number>();
+    const counts = new Map<string, number>();
+    cubes.forEach(cube => {
+      const [x, y, z] = cube;
+      [[y, z], [y + 1, z], [y, z + 1], [y + 1, z + 1]].forEach(([yy, zz]) => {
+        const k = edgeKey(x, yy, zz, 0);
+        counts.set(k, (counts.get(k) || 0) + 1);
+      });
+      [[x, z], [x + 1, z], [x, z + 1], [x + 1, z + 1]].forEach(([xx, zz]) => {
+        const k = edgeKey(xx, y, zz, 1);
+        counts.set(k, (counts.get(k) || 0) + 1);
+      });
+      [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].forEach(([xx, yy]) => {
+        const k = edgeKey(xx, yy, z, 2);
+        counts.set(k, (counts.get(k) || 0) + 1);
+      });
+    });
+    return counts;
+  }, [cubes]);
 }
 
-const FallingPiece = ({ piece }: FallingPieceProps) => {
+// --- HOOK 2: useOuterEdges (MODIFIED) ---
+// This hook now returns an array of start/end points, not a finished geometry.
+function useOuterEdges(edgeCounts: Map<string, number>) {
+  return useMemo(() => {
+    const edges: TubeProps[] = [];
+    const [gridX, gridY, gridZ] = GRID_SIZE;
 
-  // This hook calculates a single, merged geometry for the bright outer silhouette
-  const mergedGeometry = useMemo(() => {
-    if (!piece || piece.length === 0) return null;
+    edgeCounts.forEach((count, key) => {
+      if (count % 2 === 1) {
+        const [x, y, z, dir] = key.split(',').map(Number);
+        const [dx, dy, dz] = DIRS[dir];
 
-    const geometries: THREE.BoxGeometry[] = [];
-    piece.forEach(block => {
-      const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-      const position = getWorldPosition(block[0], block[1], block[2]);
-      // Apply the position to the geometry's vertices before merging
-      geometry.translate(position.x, position.y, position.z);
-      geometries.push(geometry);
+        // Calculate world coordinates for the start and end of the edge
+        const start = new THREE.Vector3(
+          (x - gridX / 2) * CELL_SIZE,
+          (y - gridY / 2) * CELL_SIZE,
+          (z - gridZ / 2) * CELL_SIZE
+        );
+        const end = new THREE.Vector3(
+          (x + dx - gridX / 2) * CELL_SIZE,
+          (y + dy - gridY / 2) * CELL_SIZE,
+          (z + dz - gridZ / 2) * CELL_SIZE
+        );
+        edges.push({ start, end });
+      }
     });
+    return edges;
+  }, [edgeCounts]);
+}
 
-    return mergeGeometries(geometries);
-  }, [piece]);
 
-  if (!piece) return null;
+// --- The Main Component ---
+const FallingPiece = ({ piece }: { piece: Shape | null }) => {
+  const edgeCounts = useEdgeCounts(piece);
+  const outerEdges = useOuterEdges(edgeCounts);
 
+  // Render a Tube component for each outer edge
   return (
     <group>
-      {/* Layer 1: Render ALL edges of each individual cube with low opacity */}
-      {piece.map((block, index) => {
-        const position = getWorldPosition(block[0], block[1], block[2]);
-        return (
-          <mesh key={`dim-${index}`} position={position}>
-            <boxGeometry args={[CELL_SIZE, CELL_SIZE, CELL_SIZE]} />
-            <meshBasicMaterial transparent opacity={0} />
-            <Edges scale={1} color={'ff0000'} linewidth={1}>
-              <meshBasicMaterial transparent opacity={1} color={FALLING_PIECE_COLOR} />
-            </Edges>
-          </mesh>
-        );
-      })}
-
-      {/* Layer 2: Render ONLY the outer edges of the merged shape with high opacity */}
-      {mergedGeometry && (
-        <mesh geometry={mergedGeometry}>
-          <meshBasicMaterial transparent opacity={0} />
-          <Edges scale={1} color={FALLING_PIECE_COLOR} linewidth={2.5}>
-              <meshBasicMaterial transparent opacity={1} color={FALLING_PIECE_COLOR} />
-          </Edges>
-        </mesh>
-      )}
+      {outerEdges.map((edge, i) => (
+        <Tube key={i} start={edge.start} end={edge.end} />
+      ))}
     </group>
   );
 };
