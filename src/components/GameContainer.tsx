@@ -8,7 +8,7 @@ import NextPiecePreview from './NextPiecePreview';
 import { useInterval } from '../hooks/useInterval';
 
 // --- CONSTANTS AND CONFIGURATION ---
-export const GRID_SIZE: [number, number, number] = [10, 20, 10];
+export const GRID_SIZE: [number, number, number] = [8, 15, 8];
 export const CELL_SIZE = 30;
 const INITIAL_DROP_INTERVAL = 1000;
 const MIN_DROP_INTERVAL = 100;
