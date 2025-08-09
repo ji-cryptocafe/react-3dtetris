@@ -1,45 +1,29 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { type Shape, GRID_SIZE, CELL_SIZE } from './GameContainer';
+import { type Shape, CELL_SIZE } from './GameContainer';
 import { DIRS, edgeKey } from '../utils/edgeHash';
 
 const FALLING_PIECE_COLOR = '#00ff64';
-// highlight-start
-// --- THIS IS OUR NEW "LINE WIDTH" ---
-// We control the thickness by changing the radius of the tube.
-const LINE_RADIUS = 0.4; 
-// highlight-end
+const LINE_RADIUS = 0.5;
 
-// --- A NEW, DEDICATED COMPONENT TO RENDER ONE THICK LINE (TUBE) ---
 interface TubeProps {
   start: THREE.Vector3;
   end: THREE.Vector3;
 }
 const Tube = ({ start, end }: TubeProps) => {
-  // Create a 3D path (a curve) from the start to the end point
   const path = useMemo(() => new THREE.LineCurve3(start, end), [start, end]);
-
   return (
     <mesh>
-      {/* Create a tube geometry that follows the path */}
-      <tubeGeometry args={[
-        path,       // The path to follow
-        1,          // Segments along the tube's length (1 is enough for a straight line)
-        LINE_RADIUS,// The radius (thickness) of the tube
-        8,          // The number of sides on the tube (8 looks like a smooth cylinder)
-        false       // Not a closed loop
-      ]} />
+      <tubeGeometry args={[path, 1, LINE_RADIUS, 8, false]} />
       <meshStandardMaterial
         color={FALLING_PIECE_COLOR}
-        emissive={FALLING_PIECE_COLOR} // Make it glow
+        emissive={FALLING_PIECE_COLOR}
         emissiveIntensity={0.5}
       />
     </mesh>
   );
 };
 
-
-// --- HOOK 1: useEdgeCounts (no changes here) ---
 function useEdgeCounts(cubes: Shape | null) {
   return useMemo(() => {
     if (!cubes) return new Map<string, number>();
@@ -63,19 +47,14 @@ function useEdgeCounts(cubes: Shape | null) {
   }, [cubes]);
 }
 
-// --- HOOK 2: useOuterEdges (MODIFIED) ---
-// This hook now returns an array of start/end points, not a finished geometry.
-function useOuterEdges(edgeCounts: Map<string, number>) {
+function useOuterEdges(edgeCounts: Map<string, number>, gridSize: [number, number, number]) {
   return useMemo(() => {
     const edges: TubeProps[] = [];
-    const [gridX, gridY, gridZ] = GRID_SIZE;
-
+    const [gridX, gridY, gridZ] = gridSize;
     edgeCounts.forEach((count, key) => {
       if (count % 2 === 1) {
         const [x, y, z, dir] = key.split(',').map(Number);
         const [dx, dy, dz] = DIRS[dir];
-
-        // Calculate world coordinates for the start and end of the edge
         const start = new THREE.Vector3(
           (x - gridX / 2) * CELL_SIZE,
           (y - gridY / 2) * CELL_SIZE,
@@ -90,16 +69,17 @@ function useOuterEdges(edgeCounts: Map<string, number>) {
       }
     });
     return edges;
-  }, [edgeCounts]);
+  }, [edgeCounts, gridSize]);
 }
 
+interface FallingPieceProps {
+  gridSize: [number, number, number];
+  piece: Shape | null;
+}
 
-// --- The Main Component ---
-const FallingPiece = ({ piece }: { piece: Shape | null }) => {
+const FallingPiece = ({ gridSize, piece }: FallingPieceProps) => {
   const edgeCounts = useEdgeCounts(piece);
-  const outerEdges = useOuterEdges(edgeCounts);
-
-  // Render a Tube component for each outer edge
+  const outerEdges = useOuterEdges(edgeCounts, gridSize);
   return (
     <group>
       {outerEdges.map((edge, i) => (

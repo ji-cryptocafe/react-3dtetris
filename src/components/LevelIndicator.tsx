@@ -1,30 +1,37 @@
-// We need the same color palette as the game board to match colors
 import { PALETTE } from './GameBoard'; 
 
 interface LevelIndicatorProps {
-  levelStatus: boolean[]; // An array of booleans, true if the level is occupied
+  gridSize: [number, number, number];
+  levelStatus: boolean[];
 }
 
-const LevelIndicator = ({ levelStatus }: LevelIndicatorProps) => {
+const LevelIndicator = ({ gridSize, levelStatus }: LevelIndicatorProps) => {
+  const height = gridSize[1];
+  const indicators = Array.from({ length: height }).map((_, i) => levelStatus[i] || false);
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column', // Makes level 0 appear at the top
-        border: '2px solid #555',
-        padding: '5px',
-        backgroundColor: 'rgba(0, 0, 0, 0.3)',
-        borderRadius: '5px',
-      }}
-    >
-      {levelStatus.map((isOccupied, index) => (
+    <div style={{
+      position: 'absolute',
+      left: '20px',
+      top: '50%',
+      transform: 'translateY(-50%)',  
+      display: 'flex',
+      flexDirection: 'column',
+      border: '1px solid #444',
+      padding: '5px',
+      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      borderRadius: '10px',
+      maxHeight: '400px',
+      zIndex: 100,
+    }}>
+      {indicators.map((isOccupied, index) => (
         <div
           key={`level-${index}`}
           style={{
             width: '30px',
-            height: '20px',
+            height: `${350 / height}px`,
             backgroundColor: isOccupied ? PALETTE[index % PALETTE.length] : 'transparent',
-            border: '1px solid #444',
+            border: '1px solid #555',
             marginTop: '2px',
             borderRadius: '2px',
           }}

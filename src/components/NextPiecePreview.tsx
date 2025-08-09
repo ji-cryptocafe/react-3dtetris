@@ -131,7 +131,7 @@ const NextPiecePreview = ({ nextPiece }: { nextPiece: Shape | null }) => {
     }}>
       <div style={{ fontSize: '1em', marginBottom: '5px' }}>Next</div>
       <div style={{width: '100%', height: '100px'}}>
-        <Canvas camera={{ position: [0, 0, 100], fov: 50 }}>
+        <Canvas camera={{ position: [0, 0, 500], fov: 50 }}>
           <ambientLight intensity={1.5} />
           <directionalLight position={[10, 10, 10]} intensity={1} />
           <RotatingPiece piece={nextPiece} />

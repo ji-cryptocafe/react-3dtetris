@@ -1,10 +1,23 @@
+import { useState } from 'react';
 import './App.css';
 import GameContainer from './components/GameContainer';
+import MainMenu, { type GameSettings } from './components/MainMenu';
 
 function App() {
-  // We just need the GameContainer, which handles its own full-screen layout.
+  const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
+
+  const handleStartGame = (settings: GameSettings) => {
+    setGameSettings(settings);
+  };
+
   return (
-    <GameContainer />
+    <div className="App">
+      {gameSettings ? (
+        <GameContainer settings={gameSettings} />
+      ) : (
+        <MainMenu onStartGame={handleStartGame} />
+      )}
+    </div>
   );
 }
 

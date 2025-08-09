@@ -1,45 +1,25 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { useSpring, animated } from '@react-spring/three';
 import { GridDisplay } from './GridDisplay';
 import ProjectionHighlights from './ProjectionHighlights';
-import FallingPiece from './FallingPiece'; // The component that now handles falling piece rendering
-import { type Shape, type Grid, CELL_SIZE, GRID_SIZE } from './GameContainer';
+import FallingPiece from './FallingPiece';
+import { type Shape, type Grid, CELL_SIZE } from './GameContainer';
 
-// This palette needs to be exported so other components (like LevelIndicator) can use it.
-export const PALETTE = [
-  '#DC322F', '#859900', '#268BD2', '#D33682',
-  '#2AA198', '#CB4B16', '#6C71C4', '#B58900',
-];
+export const PALETTE = [ '#DC322F', '#859900', '#268BD2', '#D33682', '#2AA198', '#CB4B16', '#6C71C4', '#B58900' ];
 
-// --- SIMPLIFIED BLOCK COMPONENT ---
-// This component is now only used for static (landed) blocks and clearing blocks.
-// It no longer needs to know if a block is "falling".
 interface BlockProps {
-  position: THREE.Vector3;
-  color: string;
-  isClearing: boolean;
+  position: THREE.Vector3; color: string; isClearing: boolean;
 }
 
 const Block = ({ position, color, isClearing }: BlockProps) => {
-  const [spring, api] = useSpring(() => ({
-    scale: [1, 1, 1],
-    position: position.toArray(),
-    config: { mass: 1, tension: 300, friction: 30 },
-  }));
-
+  const [spring, api] = useSpring(() => ({ scale: [1, 1, 1], position: position.toArray(), config: { mass: 1, tension: 300, friction: 30 }, }));
   useEffect(() => {
-    if (isClearing) {
-      // Trigger the shrink animation for clearing blocks
-      api.start({ to: { scale: [0, 0, 0] } });
-    } else {
-      // Ensure static blocks are at their correct position and scale
-      api.start({ to: { position: position.toArray(), scale: [1, 1, 1] } });
-    }
+    if (isClearing) { api.start({ to: { scale: [0, 0, 0] } }); } 
+    else { api.start({ to: { position: position.toArray(), scale: [1, 1, 1] } }); }
   }, [position, isClearing, api]);
-
   return (
     <animated.mesh position={spring.position as any} scale={spring.scale as any}>
       <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
@@ -48,55 +28,38 @@ const Block = ({ position, color, isClearing }: BlockProps) => {
   );
 };
 
-
-// --- GAMEBOARD COMPONENT ---
-// This is the main 3D scene container.
 interface GameBoardProps {
+  gridSize: [number, number, number];
   gridState: Grid;
   currentPiece: Shape | null;
   clearingBlocks: Shape;
+  // highlight-start
+  cameraSettings: { position: [number, number, number]; fov: number };
+  // highlight-end
 }
 
-const GameBoard = ({ gridState, currentPiece, clearingBlocks }: GameBoardProps) => {
-  // Helper function to convert grid coordinates to 3D world coordinates
-  const getWorldPosition = (x: number, y: number, z: number): THREE.Vector3 => {
+const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, cameraSettings }: GameBoardProps) => {
+  const getWorldPosition = useCallback((x: number, y: number, z: number): THREE.Vector3 => {
+    const [gridX, gridY, gridZ] = gridSize;
     return new THREE.Vector3(
-      (x - GRID_SIZE[0] / 2) * CELL_SIZE + CELL_SIZE / 2,
-      (y - GRID_SIZE[1] / 2) * CELL_SIZE + CELL_SIZE / 2,
-      (z - GRID_SIZE[2] / 2) * CELL_SIZE + CELL_SIZE / 2
+      (x - gridX / 2) * CELL_SIZE + CELL_SIZE / 2,
+      (y - gridY / 2) * CELL_SIZE + CELL_SIZE / 2,
+      (z - gridZ / 2) * CELL_SIZE + CELL_SIZE / 2
     );
-  };
+  }, [gridSize]);
 
   return (
-    <div style={{ height: '80vh', width: '80vw', margin: 'auto', background: '#282c34' }}>
-      <Canvas camera={{ position: [0, 0, 400], fov: 60 }}>
-        {/* Scene lighting */}
+    <div style={{ width: '100%', height: '100%' }}>
+      {/* highlight-start */}
+      <Canvas camera={cameraSettings}>
+      {/* highlight-end */}
         <ambientLight intensity={0.6} />
         <directionalLight position={[100, 200, 150]} intensity={0.8} />
-        
-        {/* Camera controls (zoom only) */}
-        <OrbitControls
-          enableRotate={false}
-          enablePan={false}
-          enableZoom={true}
-          minDistance={200}
-          maxDistance={1000}
-        />
-
-        {/* This group rotates the entire game world for the top-down angled view */}
+        <OrbitControls enableRotate={false} enablePan={false} enableZoom={true} minDistance={200} maxDistance={1000} />
         <group rotation={[-Math.PI / 2, 0, 0]}>
-          
-          {/* Renders the wireframe grid */}
-          <GridDisplay />
-          
-          {/* Renders the highlights on the walls */}
-          <ProjectionHighlights currentPiece={currentPiece} />
-
-          {/* Renders the currently falling piece using the new advanced logic */}
-          <FallingPiece piece={currentPiece} />
-          
-          
-          {/* Renders the static, placed blocks from the grid state */}
+          <GridDisplay gridSize={gridSize} />
+          <ProjectionHighlights gridSize={gridSize} currentPiece={currentPiece} />
+          <FallingPiece gridSize={gridSize} piece={currentPiece} />
           {gridState.map((row, x) =>
             row.map((col, y) =>
               col.map((cellValue, z) => {
@@ -109,8 +72,6 @@ const GameBoard = ({ gridState, currentPiece, clearingBlocks }: GameBoardProps) 
               })
             )
           )}
-          
-          {/* Renders the blocks that are currently in their "clearing" animation */}
           {clearingBlocks.map((block, index) => {
               const pos = getWorldPosition(block[0], block[1], block[2]);
               const color = PALETTE[block[1] % PALETTE.length];
