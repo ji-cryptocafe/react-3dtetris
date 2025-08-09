@@ -1,4 +1,4 @@
-import { PALETTE } from './GameBoard'; 
+import { PALETTE } from '../store/gameStore'; 
 
 interface LevelIndicatorProps {
   gridSize: [number, number, number];

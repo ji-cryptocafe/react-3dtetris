@@ -1,9 +1,9 @@
 import { create } from 'zustand';
+import * as THREE from 'three'; // Import THREE for Vector3
 import { type GameSettings } from '../components/MainMenu';
-import * as engine from '../game/engine'; // Import the new engine
+import * as engine from '../game/engine'; 
 
 // --- TYPES AND CONSTANTS ---
-// Most of these were previously in GameContainer.tsx
 
 export const CELL_SIZE = 30;
 export type Vector3 = [number, number, number];
@@ -11,6 +11,17 @@ export type Shape = Vector3[];
 export type Grid = (number | string)[][][];
 type ShapeDefinition = Vector3[];
 export type PieceObject = { shape: Shape; tier: number };
+
+// highlight-start
+// Moved PALETTE here from GameBoard to be accessible by the store
+export const PALETTE = [ '#DC322F', '#859900', '#268BD2', '#D33682', '#2AA198', '#CB4B16', '#6C71C4', '#B58900' ];
+
+export interface ExplodingBlock {
+    position: Vector3;
+    velocity: Vector3;
+    color: string;
+}
+// highlight-end
 
 const SIZES: Record<GameSettings['size'], [number, number, number]> = { 'S': [8, 12, 8], 'M': [10, 15, 10], 'L': [13, 20, 13] };
 const SPEEDS: Record<GameSettings['difficulty'], number> = { 'Easy': 1200, 'Medium': 1000, 'Hard': 800 };
@@ -24,7 +35,7 @@ const SHAPES_TIER_1: ShapeDefinition[] = [ [[0,0,0], [1,0,0], [2,0,0], [3,0,0]],
 const SHAPES_TIER_2: ShapeDefinition[] = [ [[0,0,0], [1,0,0], [0,0,1], [1,0,1], [0,1,0], [1,1,0], [0,1,1], [1,1,1]], [[0,0,0], [1,0,0], [0,1,0], [0,0,1]], [[0,0,0], [1,0,0], [0,0,1], [1,0,1], [0,1,0]], [[0,0,0], [1,0,0], [2,0,0], [3,0,0], [0,1,0]], [[0,0,0], [1,0,0], [2,0,0], [3,0,0], [1,1,0]], [[0,0,0], [0,0,1], [1,0,1], [2,0,1], [2,0,0]], ];
 const SHAPES_TIER_3: ShapeDefinition[] = [ [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]], [[0,0,0], [1,0,0], [1,1,0], [1,1,1], [2,1,1]], [[0,0,0], [1,0,0], [1,1,0], [1,1,1]], ];
 
-const ANIMATION_DURATION = 250;
+const ANIMATION_DURATION = 300; // Updated to 0.3 seconds as requested
 const MIN_DROP_INTERVAL = 100;
 
 // --- STORE STATE AND ACTIONS ---
@@ -37,6 +48,7 @@ type GameState = {
   nextPiece: PieceObject | null;
   isAnimating: boolean;
   clearingBlocks: Shape;
+  explodingBlocks: ExplodingBlock[]; // New state for exploding blocks
   // Game Settings (set on init)
   settings: GameSettings | null;
   gridSize: [number, number, number];
@@ -80,6 +92,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     nextPiece: null,
     isAnimating: false,
     clearingBlocks: [],
+    explodingBlocks: [], // Add to initial state
     settings: null,
     gridSize: [0,0,0],
     initialDropInterval: 1000,
@@ -139,6 +152,7 @@ export const useGameStore = create<GameState>((set, get) => ({
             dropInterval: initialDropInterval,
             cubesPlayed: 0,
             clearingBlocks: [],
+            explodingBlocks: [], // Reset on new game
             isAnimating: false,
             availableShapes: initialShapes,
             isB2BActive: false,
@@ -177,7 +191,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
     },
     
-    // highlight-start
     processLandedPiece: (landedPiece, dropInfo) => {
         set({ isAnimating: true, currentPiece: null });
         const {
@@ -223,24 +236,55 @@ export const useGameStore = create<GameState>((set, get) => ({
             currentXP: newXP,
             dropInterval: newDropInterval,
             availableShapes: newShapes,
+            grid: turnResult.tempGrid, // Set grid with landed piece immediately
         });
 
         // 5. Handle the visual updates (animation or immediate new piece)
         if (turnResult.blocksToClear.length > 0) {
-            set({ clearingBlocks: turnResult.blocksToClear, grid: turnResult.tempGrid });
+            // highlight-start
+            const explosionSpeed = 80;
+            const innerBlocks: Shape = [];
+            const explodingBlocksData: ExplodingBlock[] = [];
+
+            // Partition blocks into inner (shrinking) and edge (exploding)
+            turnResult.blocksToClear.forEach(block => {
+                const [x, y, z] = block;
+                if (x === 0 || x === gridSize[0] - 1 || z === 0 || z === gridSize[2] - 1) {
+                    const centerOfLayerX = (gridSize[0] - 1) / 2;
+                    const centerOfLayerZ = (gridSize[2] - 1) / 2;
+                    const direction = new THREE.Vector3(x - centerOfLayerX, 0, z - centerOfLayerZ).normalize();
+                    explodingBlocksData.push({
+                        position: block,
+                        velocity: [direction.x * explosionSpeed, (Math.random() - 0.5) * 20, direction.z * explosionSpeed],
+                        color: PALETTE[y % PALETTE.length]
+                    });
+                } else {
+                    innerBlocks.push(block);
+                }
+            });
+
+            // Set state to trigger animations
+            set({
+                clearingBlocks: innerBlocks,
+                explodingBlocks: explodingBlocksData,
+            });
+            // highlight-end
+
             setTimeout(() => {
-                const finalGrid = engine.dropClearedLines(turnResult.tempGrid, turnResult.fullLayersY);
-                set({ grid: finalGrid, clearingBlocks: [] });
+                const finalGrid = engine.dropClearedLines(get().grid, turnResult.fullLayersY);
+                set({ 
+                    grid: finalGrid, 
+                    clearingBlocks: [], 
+                    explodingBlocks: [] // Clear animation states
+                });
                 createNewPiece();
                 set({ isAnimating: false });
             }, ANIMATION_DURATION);
         } else {
-            set({ grid: turnResult.tempGrid });
             createNewPiece();
             set({ isAnimating: false });
         }
     },
-    // highlight-end
     
     movePiece: (delta) => {
         const { currentPiece, isAnimating, grid, gridSize, processLandedPiece, score } = get();

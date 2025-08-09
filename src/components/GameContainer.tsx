@@ -12,7 +12,9 @@ import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
 const GameContainer = () => {
   // --- SELECTORS: Subscribing to state slices from the store ---
   const {
-    gameState, gridSize, grid, currentPiece, clearingBlocks,
+    // highlight-start
+    gameState, gridSize, grid, currentPiece, clearingBlocks, explodingBlocks,
+    // highlight-end
     score, level, timePassed, cubesPlayed, nextPiece,
     settings, isAnimating
   } = useGameStore(state => ({
@@ -21,6 +23,7 @@ const GameContainer = () => {
     grid: state.grid,
     currentPiece: state.currentPiece,
     clearingBlocks: state.clearingBlocks,
+    explodingBlocks: state.explodingBlocks, // Add selector
     score: state.score,
     level: state.level,
     timePassed: state.timePassed,
@@ -118,6 +121,7 @@ const GameContainer = () => {
           gridState={grid}
           currentPiece={currentPiece}
           clearingBlocks={clearingBlocks}
+          explodingBlocks={explodingBlocks} // Pass the new prop
           cameraSettings={cameraSettings}
         />
       </div>
