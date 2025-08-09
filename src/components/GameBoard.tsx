@@ -55,7 +55,7 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, cameraSe
       {/* highlight-end */}
         <ambientLight intensity={0.6} />
         <directionalLight position={[100, 200, 150]} intensity={0.8} />
-        <OrbitControls enableRotate={false} enablePan={false} enableZoom={true} minDistance={200} maxDistance={1000} />
+        <OrbitControls enableRotate={false} enablePan={false} enableZoom={false} minDistance={200} maxDistance={1000} />
         <group rotation={[-Math.PI / 2, 0, 0]}>
           <GridDisplay gridSize={gridSize} />
           <ProjectionHighlights gridSize={gridSize} currentPiece={currentPiece} />

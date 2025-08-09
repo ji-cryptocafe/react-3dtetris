@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { type Shape } from './GameContainer';
 import { DIRS, edgeKey } from '../utils/edgeHash';
+import { OrbitControls } from '@react-three/drei';
 
 const PREVIEW_PIECE_COLOR = '#00ff64';
 const PREVIEW_CELL_SIZE = 20;
@@ -131,7 +132,8 @@ const NextPiecePreview = ({ nextPiece }: { nextPiece: Shape | null }) => {
     }}>
       <div style={{ fontSize: '1em', marginBottom: '5px' }}>Next</div>
       <div style={{width: '100%', height: '100px'}}>
-        <Canvas camera={{ position: [0, 0, 500], fov: 50 }}>
+        <Canvas camera={{ position: [0, 0, 700], fov: 5 }}>
+          <OrbitControls enableRotate={false} enablePan={false} enableZoom={false} />
           <ambientLight intensity={1.5} />
           <directionalLight position={[10, 10, 10]} intensity={1} />
           <RotatingPiece piece={nextPiece} />
