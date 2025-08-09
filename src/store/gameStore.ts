@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { type GameSettings } from '../components/MainMenu';
+import * as engine from '../game/engine'; // Import the new engine
 
 // --- TYPES AND CONSTANTS ---
 // Most of these were previously in GameContainer.tsx
@@ -67,11 +68,6 @@ type GameState = {
   tick: () => void;
   updateTime: () => void;
   
-  // highlight-start
-  // --- HELPERS (Now part of the type definition) ---
-  isValidMove: (piece: Shape, currentGrid: Grid) => boolean;
-  getRequiredXP: (currentLevel: number) => number;
-  // highlight-end
 };
 
 const createEmptyGrid = (gridSize: [number, number, number]): Grid => Array.from({ length: gridSize[0] }, () => Array.from({ length: gridSize[1] }, () => Array(gridSize[2]).fill(0)));
@@ -100,24 +96,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     currentPieceRotations: 0,
     isB2BActive: false,
     difficultClearHistory: [],
-    
-    // --- HELPER FUNCTIONS (scoped to the store) ---
-    isValidMove: (piece, currentGrid) => {
-        const gridSize = get().gridSize;
-        for (const block of piece) {
-            const [x, y, z] = block;
-            if ( x < 0 || x >= gridSize[0] || y >= gridSize[1] || z < 0 || z >= gridSize[2] || (y >= 0 && currentGrid[x][y][z] !== 0) ) {
-                return false;
-            }
-        }
-        return true;
-    },
-
-    getRequiredXP: (currentLevel) => {
-      const XP_BASE_REQUIREMENT = 40;
-      const XP_PER_LEVEL = 8;
-      return XP_BASE_REQUIREMENT + XP_PER_LEVEL * (currentLevel - 1);
-    },
     
     // --- ACTIONS ---
     initGame: (settings) => {
@@ -174,7 +152,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     createNewPiece: () => {
-        const { nextPiece, availableShapes, gridSize, grid, isValidMove } = get();
+        const { nextPiece, availableShapes, gridSize, grid } = get();
         
         const generateRandomPiece = (): PieceObject => {
             const shape = availableShapes[Math.floor(Math.random() * availableShapes.length)];
@@ -186,7 +164,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         const pieceToSpawn = nextPiece ?? generateRandomPiece();
         const newCurrentPiece = pieceToSpawn.shape.map((block: Vector3) => [ block[0] + Math.floor(gridSize[0] / 2) - 1, block[1], block[2] + Math.floor(gridSize[2] / 2) - 1 ] as Vector3);
 
-        if (!isValidMove(newCurrentPiece, grid)) {
+        if (!engine.isValidMove(newCurrentPiece, grid, gridSize)) {
             set({ gameState: 'gameOver', currentPiece: null });
         } else {
             set({
@@ -199,111 +177,78 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
     },
     
+    // highlight-start
     processLandedPiece: (landedPiece, dropInfo) => {
         set({ isAnimating: true, currentPiece: null });
-        const { grid, gridSize, currentPieceRotations, currentPieceTranslations, isB2BActive, difficultClearHistory, currentPieceTier, currentXP, level, score, createNewPiece, getRequiredXP } = get();
-        
-        let totalPoints = 0;
-        let xpGained = 0;
-        if(dropInfo.isHardDrop) { totalPoints += 3 * dropInfo.distance; }
-        xpGained += 0.07 * landedPiece.length;
-        
-        const efficiencyScore = Math.max(0, 40 - (2 * currentPieceRotations) - currentPieceTranslations);
-        const tempGrid = grid.map(row => row.map(col => [...col]));
-        landedPiece.forEach(block => { if (block[1] >= 0) tempGrid[block[0]][block[1]][block[2]] = 1; });
-        
-        const fullLayersY: number[] = [];
-        for (let y = 0; y < gridSize[1]; y++) {
-            let isLayerFull = true;
-            for (let x = 0; x < gridSize[0]; x++) {
-                for (let z = 0; z < gridSize[2]; z++) {
-                    if (tempGrid[x][y][z] === 0) { isLayerFull = false; break; }
-                }
-                if (!isLayerFull) break;
-            }
-            if (isLayerFull) fullLayersY.push(y);
-        }
-        const linesCleared = fullLayersY.length;
-        const isDifficultClear = linesCleared >= 3;
-        
-        if (linesCleared > 0) {
-            totalPoints += efficiencyScore;
-            if (dropInfo.isHardDrop) { totalPoints += 50; }
-            const basePoints = [0, 100, 300, 500, 800][linesCleared] || 0;
-            const rarityFactor = [0, 1.0, 1.8, 3.2, 5.0][linesCleared] || 0;
-            let clearPoints = basePoints * level * rarityFactor;
-            if(isB2BActive && isDifficultClear) {
-                clearPoints *= 1.5;
-                if (difficultClearHistory.length >= 2 && difficultClearHistory.slice(-2).every(c => c >= 3)) { clearPoints *= 1.10; }
-            }
-            totalPoints += clearPoints;
-            xpGained += linesCleared;
-            if (isDifficultClear) { xpGained += 2; }
-        } else {
-            totalPoints += Math.floor(efficiencyScore / 2);
-        }
-        
-        const difficultyMultiplier = [1, 1.0, 1.06, 1.12][currentPieceTier] || 1.0;
-        totalPoints = Math.round(totalPoints * difficultyMultiplier);
-        
-        let newXP = currentXP + xpGained;
+        const {
+          grid, gridSize, currentPieceRotations, currentPieceTranslations,
+          isB2BActive, difficultClearHistory, currentPieceTier,
+          currentXP, level, score, createNewPiece, settings,
+          initialDropInterval
+        } = get();
+
+        // 1. Get all turn results from the pure engine function
+        const turnResult = engine.processTurn(
+            landedPiece, grid, gridSize, level, isB2BActive, difficultClearHistory,
+            currentPieceTier, currentPieceRotations, currentPieceTranslations, dropInfo
+        );
+
+        // 2. Calculate level progression
+        let newXP = currentXP + turnResult.xpGained;
         let newLevel = level;
-        let requiredXP = getRequiredXP(newLevel);
+        let requiredXP = engine.getRequiredXP(newLevel);
         while(newXP >= requiredXP) {
             newXP -= requiredXP;
             newLevel++;
-            requiredXP = getRequiredXP(newLevel);
+            requiredXP = engine.getRequiredXP(newLevel);
         }
-
-        const newDropInterval = Math.max(MIN_DROP_INTERVAL, get().initialDropInterval - (newLevel - 1) * 50);
+        
+        // 3. Update dynamic difficulty (drop speed, available shapes)
+        const newDropInterval = Math.max(MIN_DROP_INTERVAL, initialDropInterval - (newLevel - 1) * 50);
         let newShapes = [...SHAPES_TIER_1];
-        const settings = get().settings;
         if (settings) {
             const TIER_2_UNLOCK_LEVEL = settings.difficulty === 'Hard' ? 2 : 3;
             const TIER_3_UNLOCK_LEVEL = settings.difficulty === 'Hard' ? 4 : 6;
             if (newLevel >= TIER_2_UNLOCK_LEVEL) newShapes.push(...SHAPES_TIER_2);
             if (newLevel >= TIER_3_UNLOCK_LEVEL) newShapes.push(...SHAPES_TIER_3);
         }
-        
+
+        // 4. Set the new state based on the turn result
         set({
-            score: score + totalPoints,
+            score: score + turnResult.pointsGained,
             cubesPlayed: get().cubesPlayed + landedPiece.length,
-            isB2BActive: linesCleared > 0 ? isDifficultClear : false,
-            difficultClearHistory: [...difficultClearHistory.slice(-2), linesCleared],
+            isB2BActive: turnResult.newIsB2BActive,
+            difficultClearHistory: turnResult.newDifficultClearHistory,
             level: newLevel,
             currentXP: newXP,
             dropInterval: newDropInterval,
             availableShapes: newShapes,
         });
 
-        if (linesCleared > 0) {
-            const blocksToClear: Shape = [];
-            fullLayersY.forEach(y => { for (let x = 0; x < gridSize[0]; x++) for (let z = 0; z < gridSize[2]; z++) blocksToClear.push([x, y, z]); });
-            set({ clearingBlocks: blocksToClear });
+        // 5. Handle the visual updates (animation or immediate new piece)
+        if (turnResult.blocksToClear.length > 0) {
+            set({ clearingBlocks: turnResult.blocksToClear, grid: turnResult.tempGrid });
             setTimeout(() => {
-                let finalGrid = [...tempGrid];
-                fullLayersY.sort((a,b)=>b-a).forEach(y => {
-                    for (let yy = y; yy > 0; yy--) for (let x = 0; x < gridSize[0]; x++) for (let z = 0; z < gridSize[2]; z++) finalGrid[x][yy][z] = finalGrid[x][yy-1][z];
-                    for (let x = 0; x < gridSize[0]; x++) for (let z = 0; z < gridSize[2]; z++) finalGrid[x][0][z] = 0;
-                });
+                const finalGrid = engine.dropClearedLines(turnResult.tempGrid, turnResult.fullLayersY);
                 set({ grid: finalGrid, clearingBlocks: [] });
                 createNewPiece();
                 set({ isAnimating: false });
             }, ANIMATION_DURATION);
         } else {
-            set({ grid: tempGrid });
+            set({ grid: turnResult.tempGrid });
             createNewPiece();
             set({ isAnimating: false });
         }
     },
+    // highlight-end
     
     movePiece: (delta) => {
-        const { currentPiece, isAnimating, grid, isValidMove, processLandedPiece, score } = get();
+        const { currentPiece, isAnimating, grid, gridSize, processLandedPiece, score } = get();
         if (!currentPiece || isAnimating) return;
         
         const newPiece = currentPiece.map(block => [block[0] + delta[0], block[1] + delta[1], block[2] + delta[2]] as Vector3);
         
-        if (isValidMove(newPiece, grid)) {
+        if (engine.isValidMove(newPiece, grid, gridSize)) {
             let stateUpdate: Partial<GameState> = { currentPiece: newPiece };
             if (delta[0] !== 0 || delta[2] !== 0) { stateUpdate.currentPieceTranslations = get().currentPieceTranslations + 1; }
             if (delta[1] > 0) { stateUpdate.score = score + 1; }
@@ -314,7 +259,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     rotatePiece: (axis) => {
-        const { currentPiece, isAnimating, grid, isValidMove } = get();
+        const { currentPiece, isAnimating, grid, gridSize } = get();
         if (!currentPiece || isAnimating) return;
 
         const center = currentPiece[0];
@@ -330,20 +275,20 @@ export const useGameStore = create<GameState>((set, get) => ({
             return [ Math.round(newPos[0] + center[0]), Math.round(newPos[1] + center[1]), Math.round(newPos[2] + center[2]) ] as Vector3;
         });
 
-        if(isValidMove(rotatedPiece, grid)) {
+        if(engine.isValidMove(rotatedPiece, grid, gridSize)) {
             set({ currentPiece: rotatedPiece, currentPieceRotations: get().currentPieceRotations + 1 });
         }
     },
 
     hardDrop: () => {
-        const { currentPiece, isAnimating, grid, gridSize, isValidMove, processLandedPiece } = get();
+        const { currentPiece, isAnimating, grid, gridSize, processLandedPiece } = get();
         if (!currentPiece || isAnimating) return;
 
         let dropDistance = 0;
         let landedPiece = currentPiece;
         for (let y = 1; y < gridSize[1]; y++) {
             const testPiece = currentPiece.map(b => [b[0], b[1] + y, b[2]] as Vector3);
-            if (isValidMove(testPiece, grid)) {
+            if (engine.isValidMove(testPiece, grid, gridSize)) {
                 landedPiece = testPiece;
                 dropDistance = y;
             } else {

@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
 
-// This is the ideal aspect ratio of our game area (width / height).
-// Based on a ~900x600 canvas, a ratio of 1.5 is a good starting point.
-const TARGET_ASPECT_RATIO = 1.5;
+// This is the ideal aspect ratio for a *landscape* view.
+const LANDSCAPE_ASPECT_RATIO = 1.1;
 
 export function useResponsiveGameSize() {
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -15,18 +14,27 @@ export function useResponsiveGameSize() {
       let newWidth: number;
       let newHeight: number;
 
-      // Check if the screen is wider than our target aspect ratio (e.g., a desktop monitor)
-      if (screenWidth / screenHeight > TARGET_ASPECT_RATIO) {
+      // highlight-start
+      // Determine the ideal aspect ratio for the container based on the screen's orientation.
+      // We also add a small buffer (0.9) to the portrait ratio to make it slightly less tall,
+      // which often looks better and leaves more room for UI elements.
+      const isPortrait = screenHeight > screenWidth;
+      const targetAspectRatio = isPortrait 
+        ? (1 / LANDSCAPE_ASPECT_RATIO)
+        : LANDSCAPE_ASPECT_RATIO;
+      // highlight-end
+
+      // Check if the screen is WIDER than our target aspect ratio.
+      if (screenWidth / screenHeight > targetAspectRatio) {
         // If so, the height is the limiting dimension.
-        // We use 90% of the screen height to leave some vertical margin.
+        // We use 98% of the screen height to leave some vertical margin.
         newHeight = screenHeight * 0.98;
-        newWidth = newHeight * TARGET_ASPECT_RATIO;
+        newWidth = newHeight * targetAspectRatio;
       } else {
-        // Otherwise, the screen is taller (e.g., a phone in portrait mode).
-        // The width is the limiting dimension.
-        // We use 95% of the screen width to leave some horizontal margin.
+        // Otherwise, the width is the limiting dimension.
+        // We use 98% of the screen width to leave some horizontal margin.
         newWidth = screenWidth * 0.98;
-        newHeight = newWidth / TARGET_ASPECT_RATIO;
+        newHeight = newWidth / targetAspectRatio;
       }
       
       setSize({ width: newWidth, height: newHeight });
