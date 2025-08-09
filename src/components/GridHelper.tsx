@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { useMemo } from 'react';
-import { CELL_SIZE } from './GameContainer'; // Import CELL_SIZE for consistency
+import { CELL_SIZE } from '../store/gameStore';
 
 interface GridHelperProps {
   gridSize: [number, number, number];

@@ -6,7 +6,7 @@ import { useSpring, animated } from '@react-spring/three';
 import { GridDisplay } from './GridDisplay';
 import ProjectionHighlights from './ProjectionHighlights';
 import FallingPiece from './FallingPiece';
-import { type Shape, type Grid, CELL_SIZE } from './GameContainer';
+import { type Shape, type Grid, CELL_SIZE } from '../store/gameStore';
 
 export const PALETTE = [ '#DC322F', '#859900', '#268BD2', '#D33682', '#2AA198', '#CB4B16', '#6C71C4', '#B58900' ];
 
@@ -54,7 +54,7 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, cameraSe
       <Canvas camera={cameraSettings}>
       {/* highlight-end */}
         <ambientLight intensity={0.6} />
-        <directionalLight position={[100, 200, 150]} intensity={0.8} />
+        <directionalLight position={[100, 200, 1000]} intensity={1.8} />
         <OrbitControls enableRotate={false} enablePan={false} enableZoom={false} minDistance={200} maxDistance={1000} />
         <group rotation={[-Math.PI / 2, 0, 0]}>
           <GridDisplay gridSize={gridSize} />

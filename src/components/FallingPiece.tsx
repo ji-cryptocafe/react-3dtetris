@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import { type Shape, CELL_SIZE } from './GameContainer';
+import { type Shape, CELL_SIZE } from '../store/gameStore';
 import { DIRS, edgeKey } from '../utils/edgeHash';
 
 const FALLING_PIECE_COLOR = '#00ff64';

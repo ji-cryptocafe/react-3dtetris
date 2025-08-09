@@ -1,19 +1,20 @@
-import { useState } from 'react';
 import './App.css';
 import GameContainer from './components/GameContainer';
 import MainMenu, { type GameSettings } from './components/MainMenu';
+import { useGameStore } from './store/gameStore';
 
 function App() {
-  const [gameSettings, setGameSettings] = useState<GameSettings | null>(null);
+  const gameState = useGameStore((state) => state.gameState);
+  const initGame = useGameStore((state) => state.initGame);
 
   const handleStartGame = (settings: GameSettings) => {
-    setGameSettings(settings);
+    initGame(settings);
   };
 
   return (
     <div className="App">
-      {gameSettings ? (
-        <GameContainer settings={gameSettings} />
+      {gameState === 'playing' || gameState === 'gameOver' ? (
+        <GameContainer />
       ) : (
         <MainMenu onStartGame={handleStartGame} />
       )}

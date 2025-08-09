@@ -1,7 +1,7 @@
 import { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { type Shape } from './GameContainer';
+import { type Shape } from '../store/gameStore';
 import { DIRS, edgeKey } from '../utils/edgeHash';
 import { OrbitControls } from '@react-three/drei';
 

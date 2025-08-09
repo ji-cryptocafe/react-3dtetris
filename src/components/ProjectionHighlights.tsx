@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import * as THREE from 'three';
-import { type Shape, CELL_SIZE } from './GameContainer';
+import { type Shape, CELL_SIZE } from '../store/gameStore';
 
 interface HighlightPlaneProps {
   position: THREE.Vector3;
