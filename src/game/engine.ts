@@ -38,7 +38,6 @@ export const getRequiredXP = (currentLevel: number): number => {
   return XP_BASE_REQUIREMENT + XP_PER_LEVEL * (currentLevel - 1);
 };
 
-// highlight-start
 /**
  * Calculates the outcome of a piece landing.
  * This is a pure function that returns all the state changes without applying them.
@@ -145,9 +144,10 @@ export const processTurn = (
  */
 export function dropClearedLines(grid: Grid, linesToClear: number[]): Grid {
     let newGrid = grid.map(row => row.map(col => [...col]));
-    const gridHeight = newGrid[0].length;
+    // highlight-start
     const gridWidth = newGrid.length;
     const gridDepth = newGrid[0][0].length;
+    // highlight-end
   
     linesToClear.sort((a, b) => b - a).forEach(y => {
       // Pull down all rows from above
@@ -167,4 +167,3 @@ export function dropClearedLines(grid: Grid, linesToClear: number[]): Grid {
     });
     return newGrid;
 }
-// highlight-end
