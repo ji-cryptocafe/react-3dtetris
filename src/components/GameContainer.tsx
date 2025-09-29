@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import GameBoard from './GameBoard';
 import LevelIndicator from './LevelIndicator';
 import StatsDisplay from './StatsDisplay';
@@ -57,6 +57,27 @@ const GameContainer = () => {
     return status;
   }, [grid, gridSize]);
   
+  const { submitHighscore } = useGameStore.getState();
+  const [playerName, setPlayerName] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
+  // Reset submitted state on game restart
+  useEffect(() => {
+    if (gameState === 'playing') {
+      setSubmitted(false);
+      setPlayerName('');
+    }
+  }, [gameState]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (playerName.trim() && !submitted) {
+      submitHighscore(playerName.trim());
+      setSubmitted(true);
+    }
+  };
+
+
   const cameraSettings = settings ? CAMERA_SETTINGS[settings.size] : CAMERA_SETTINGS['S'];
 
   // --- HOOKS for side effects (intervals, event listeners) ---
@@ -108,12 +129,27 @@ const GameContainer = () => {
       <NextPiecePreview nextPiece={nextPiece ? nextPiece.shape : null} />
       <LevelIndicator gridSize={gridSize} levelStatus={levelStatus} />
       {isGameOver ? (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'white', zIndex: 1000, textShadow: '2px 2px 4px #000' }}>
-          <h2 style={{ color: 'red', fontSize: '3em', margin: 0 }}>GAME OVER</h2>
-          <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Press any key to restart</p>
-        </div>
+          <div style={{...}}>
+              <h2 style={{...}}>GAME OVER</h2>
+              {submitted ? (
+                  <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Score Submitted! Thanks for playing.</p>
+              ) : (
+                  <form onSubmit={handleSubmit}>
+                      <input
+                          type="text"
+                          value={playerName}
+                          onChange={(e) => setPlayerName(e.target.value)}
+                          placeholder="Enter Your Name (max 20 chars)"
+                          maxLength={20}
+                          style={{ padding: '10px', fontSize: '1em', marginRight: '10px', textAlign: 'center' }}
+                      />
+                      <button type="submit" style={{ padding: '10px 20px', fontSize: '1em' }}>Submit Score</button>
+                  </form>
+              )}
+              <p style={{ fontSize: '1.2em', marginTop: '20px' }}>Press any key to restart</p>
+          </div>
       ) : (
-        <RestartButton onRestart={resetGame} />
+          <RestartButton onRestart={resetGame} />
       )}
       <div style={{ width: gameAreaSize.width, height: gameAreaSize.height }}>
         <GameBoard

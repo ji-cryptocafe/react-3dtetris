@@ -12,6 +12,9 @@ export type Grid = (number | string)[][][];
 type ShapeDefinition = Vector3[];
 export type PieceObject = { shape: Shape; tier: number };
 
+export type Highscore = { player_name: string; score: number };
+
+
 // highlight-start
 // Moved PALETTE here from GameBoard to be accessible by the store
 export const PALETTE = [ '#DC322F', '#859900', '#268BD2', '#D33682', '#2AA198', '#CB4B16', '#6C71C4', '#B58900' ];
@@ -69,6 +72,9 @@ type GameState = {
   isB2BActive: boolean;
   difficultClearHistory: number[];
 
+  highscores: Highscore[];
+  highscoreState: 'idle' | 'loading' | 'error';
+
   // --- ACTIONS ---
   initGame: (settings: GameSettings) => void;
   resetGame: () => void;
@@ -79,7 +85,8 @@ type GameState = {
   hardDrop: () => void;
   tick: () => void;
   updateTime: () => void;
-  
+  fetchHighscores: () => Promise<void>;
+  submitHighscore: (playerName: string) => Promise<void>;
 };
 
 const createEmptyGrid = (gridSize: [number, number, number]): Grid => Array.from({ length: gridSize[0] }, () => Array.from({ length: gridSize[1] }, () => Array(gridSize[2]).fill(0)));
@@ -110,6 +117,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     isB2BActive: false,
     difficultClearHistory: [],
     
+    highscores: [],
+    highscoreState: 'idle',
+
     // --- ACTIONS ---
     initGame: (settings) => {
         set({ settings, gameState: 'playing' });
@@ -351,5 +361,33 @@ export const useGameStore = create<GameState>((set, get) => ({
         if (startTime) {
             set({ timePassed: Date.now() - startTime });
         }
-    }
+    },
+
+    fetchHighscores: async () => {
+        set({ highscoreState: 'loading' });
+        try {
+            const response = await fetch('/api/get-highscores');
+            if (!response.ok) throw new Error('Failed to fetch');
+            const data = await response.json();
+            set({ highscores: data, highscoreState: 'idle' });
+        } catch (error) {
+            set({ highscoreState: 'error' });
+        }
+    },
+
+    submitHighscore: async (playerName) => {
+        const { score } = get();
+        try {
+            await fetch('/api/submit-highscore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerName, score })
+            });
+            // After submitting, refresh the highscores
+            get().fetchHighscores();
+        } catch (error) {
+            console.error("Failed to submit highscore:", error);
+        }
+    },
+
 }));
