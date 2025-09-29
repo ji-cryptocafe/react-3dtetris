@@ -38,26 +38,43 @@ const GameContainer = () => {
 
   // --- LOCAL STATE for UI ---
   const [playerName, setPlayerName] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  
+  // const [submitted, setSubmitted] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [showSubmittedMessage, setShowSubmittedMessage] = useState(false);
+
   const gameAreaSize = useResponsiveGameSize();
   const isGameOver = gameState === 'gameOver';
 
-  // Reset submitted state on game restart
+  // highlight-start
+  // Reset UI state when a new game starts
   useEffect(() => {
     if (gameState === 'playing') {
-      setSubmitted(false);
+      setHasSubmitted(false);
+      setShowSubmittedMessage(false);
       setPlayerName('');
     }
   }, [gameState]);
 
+  // Effect to hide the "Score Submitted!" message after 3 seconds
+  useEffect(() => {
+    if (showSubmittedMessage) {
+      const timer = setTimeout(() => {
+        setShowSubmittedMessage(false);
+      }, 3000);
+      return () => clearTimeout(timer); // Cleanup timer on unmount
+    }
+  }, [showSubmittedMessage]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (playerName.trim() && !submitted) {
+    if (playerName.trim() && !hasSubmitted) {
       submitHighscore(playerName.trim());
-      setSubmitted(true);
+      setHasSubmitted(true);
+      setShowSubmittedMessage(true);
     }
   };
+  // highlight-end
+
 
   // --- DERIVED STATE & PROPS ---
   const levelStatus = useMemo(() => {
@@ -129,39 +146,50 @@ const GameContainer = () => {
       <LevelIndicator gridSize={gridSize} levelStatus={levelStatus} />
       {/* highlight-start */}
       {isGameOver ? (
-        // highlight-start
-        // New Game Over screen layout
         <div style={{
             position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-            textAlign: 'center', color: 'white', zIndex: 1000, textShadow: '2px 2px 4px #000',
-            background: 'rgba(0, 0, 0, 0.6)', padding: '40px', borderRadius: '15px',
-            display: 'flex', flexDirection: 'column', alignItems: 'center'
+            textAlign: 'center', color: 'white', zIndex: 1000,
+            background: 'rgba(20, 20, 25, 0.85)', padding: '30px', borderRadius: '15px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            minWidth: '350px', // Ensure enough space
+            border: '1px solid #444',
         }}>
-          <h2 style={{ color: 'red', fontSize: '3em', margin: 0 }}>GAME OVER</h2>
+          <h2 style={{ color: '#ff4d4d', fontSize: '3em', margin: 0, textShadow: '2px 2px 8px #000' }}>GAME OVER</h2>
           
-          {submitted ? (
-            <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Score Submitted!</p>
-          ) : (
-            <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
-              <input
-                type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Enter Your Name"
-                maxLength={20}
-                style={{ padding: '10px', fontSize: '1em', marginRight: '10px', textAlign: 'center', borderRadius: '5px', border: '1px solid #555', background: '#333', color: 'white' }}
-              />
-              <button type="submit" style={{ padding: '10px 20px', fontSize: '1em', cursor: 'pointer', borderRadius: '5px', border: 'none', background: '#28a745', color: 'white' }}>
-                Submit
-              </button>
-            </form>
-          )}
+          {/* Submission Form and Message Container */}
+          <div style={{ height: '60px', marginTop: '20px' }}>
+            {showSubmittedMessage && (
+                <p style={{ fontSize: '1.2em', color: '#28a745' }}>Score Submitted!</p>
+            )}
+            {!hasSubmitted && (
+              <form onSubmit={handleSubmit}>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Enter Your Name"
+                  maxLength={20}
+                  style={{ padding: '10px', fontSize: '1em', marginRight: '10px', textAlign: 'center', borderRadius: '5px', border: '1px solid #555', background: '#333', color: 'white' }}
+                />
+                <button type="submit" style={{ padding: '10px 20px', fontSize: '1em', cursor: 'pointer', borderRadius: '5px', border: 'none', background: '#28a745', color: 'white' }}>
+                  Submit
+                </button>
+              </form>
+            )}
+          </div>
 
           <HighscoreDisplay />
 
-          <RestartButton onRestart={resetGame} />
+          {/* New, locally styled restart button */}
+          <button onClick={resetGame} style={{
+              marginTop: '30px', padding: '15px 40px', fontSize: '1.2em',
+              fontWeight: 'bold', cursor: 'pointer', border: 'none',
+              backgroundColor: '#007bff', color: 'white', borderRadius: '8px',
+              transition: 'background-color 0.2s ease',
+          }}>
+            Play Again
+          </button>
         </div>
-        // highlight-end
       ) : (
         // During active gameplay, the restart button is in the corner
         <RestartButton onRestart={resetGame} />

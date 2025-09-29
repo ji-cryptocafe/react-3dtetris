@@ -15,7 +15,8 @@ const HighscoreDisplay = () => {
 
   return (
     <div style={{
-      marginTop: '30px',
+      marginTop: '20px',
+      marginBottom: '20px',
       width: '100%',
       maxWidth: '300px',
       color: '#ccc',
