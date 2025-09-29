@@ -5,6 +5,8 @@ import StatsDisplay from './StatsDisplay';
 import ControlsHint from './ControlsHint';
 import RestartButton from './RestartButton';
 import NextPiecePreview from './NextPiecePreview';
+import HighscoreDisplay from './HighscoreDisplay'; // Import the new component
+
 import { useInterval } from '../hooks/useInterval';
 import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
@@ -83,7 +85,11 @@ const GameContainer = () => {
   useInterval(updateTime, isGameOver ? null : 100);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    // Prevent keyboard controls from affecting the input field
+    if (e.target instanceof HTMLInputElement) return;
+
     if (isGameOver || isAnimating) return;
+
     const key = e.key.toLowerCase();
     if (key === 'a' || key === 'arrowleft') movePiece([-1, 0, 0]);
     else if (key === 'd' || key === 'arrowright') movePiece([1, 0, 0]);
@@ -100,6 +106,7 @@ const GameContainer = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  /*
   useEffect(() => {
     if (!isGameOver) return;
     const handleRestart = () => resetGame();
@@ -110,6 +117,7 @@ const GameContainer = () => {
       window.removeEventListener('mousedown', handleRestart);
     };
   }, [isGameOver, resetGame]);
+  */
 
   if (!settings) return null;
 
@@ -121,28 +129,41 @@ const GameContainer = () => {
       <LevelIndicator gridSize={gridSize} levelStatus={levelStatus} />
       {/* highlight-start */}
       {isGameOver ? (
-        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'white', zIndex: 1000, textShadow: '2px 2px 4px #000' }}>
+        // highlight-start
+        // New Game Over screen layout
+        <div style={{
+            position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+            textAlign: 'center', color: 'white', zIndex: 1000, textShadow: '2px 2px 4px #000',
+            background: 'rgba(0, 0, 0, 0.6)', padding: '40px', borderRadius: '15px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center'
+        }}>
           <h2 style={{ color: 'red', fontSize: '3em', margin: 0 }}>GAME OVER</h2>
+          
           {submitted ? (
-            <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Score Submitted! Thanks for playing.</p>
+            <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Score Submitted!</p>
           ) : (
             <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
               <input
                 type="text"
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Enter Your Name (max 20 chars)"
+                placeholder="Enter Your Name"
                 maxLength={20}
                 style={{ padding: '10px', fontSize: '1em', marginRight: '10px', textAlign: 'center', borderRadius: '5px', border: '1px solid #555', background: '#333', color: 'white' }}
               />
               <button type="submit" style={{ padding: '10px 20px', fontSize: '1em', cursor: 'pointer', borderRadius: '5px', border: 'none', background: '#28a745', color: 'white' }}>
-                Submit Score
+                Submit
               </button>
             </form>
           )}
-          <p style={{ fontSize: '1.2em', marginTop: '20px' }}>Press any key to restart</p>
+
+          <HighscoreDisplay />
+
+          <RestartButton onRestart={resetGame} />
         </div>
+        // highlight-end
       ) : (
+        // During active gameplay, the restart button is in the corner
         <RestartButton onRestart={resetGame} />
       )}
       {/* highlight-end */}

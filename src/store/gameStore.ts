@@ -176,8 +176,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     },
 
     createNewPiece: () => {
-        const { nextPiece, availableShapes, gridSize, grid } = get();
-        
+        // const { nextPiece, availableShapes, gridSize, grid } = get();
+        const { nextPiece, availableShapes, gridSize, grid, fetchHighscores } = get(); // Add fetchHighscores
         const generateRandomPiece = (): PieceObject => {
             const shape = availableShapes[Math.floor(Math.random() * availableShapes.length)];
             let tier = 1;
@@ -190,6 +190,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (!engine.isValidMove(newCurrentPiece, grid, gridSize)) {
             set({ gameState: 'gameOver', currentPiece: null });
+            fetchHighscores(); // Fetch scores when the game ends
         } else {
             set({
                 currentPiece: newCurrentPiece,
