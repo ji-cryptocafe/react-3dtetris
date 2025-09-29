@@ -6,7 +6,6 @@ import ControlsHint from './ControlsHint';
 import RestartButton from './RestartButton';
 import NextPiecePreview from './NextPiecePreview';
 import HighscoreDisplay from './HighscoreDisplay'; // Import the new component
-
 import { useInterval } from '../hooks/useInterval';
 import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
@@ -38,10 +37,11 @@ const GameContainer = () => {
 
   // --- LOCAL STATE for UI ---
   const [playerName, setPlayerName] = useState('');
-  // const [submitted, setSubmitted] = useState(false);
+  // highlight-start
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [showSubmittedMessage, setShowSubmittedMessage] = useState(false);
-
+  // highlight-end
+  
   const gameAreaSize = useResponsiveGameSize();
   const isGameOver = gameState === 'gameOver';
 
@@ -75,7 +75,6 @@ const GameContainer = () => {
   };
   // highlight-end
 
-
   // --- DERIVED STATE & PROPS ---
   const levelStatus = useMemo(() => {
     if (!gridSize[1]) return [];
@@ -104,9 +103,8 @@ const GameContainer = () => {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Prevent keyboard controls from affecting the input field
     if (e.target instanceof HTMLInputElement) return;
-
+      
     if (isGameOver || isAnimating) return;
-
     const key = e.key.toLowerCase();
     if (key === 'a' || key === 'arrowleft') movePiece([-1, 0, 0]);
     else if (key === 'd' || key === 'arrowright') movePiece([1, 0, 0]);
@@ -123,18 +121,6 @@ const GameContainer = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  /*
-  useEffect(() => {
-    if (!isGameOver) return;
-    const handleRestart = () => resetGame();
-    window.addEventListener('keydown', handleRestart);
-    window.addEventListener('mousedown', handleRestart);
-    return () => {
-      window.removeEventListener('keydown', handleRestart);
-      window.removeEventListener('mousedown', handleRestart);
-    };
-  }, [isGameOver, resetGame]);
-  */
 
   if (!settings) return null;
 
@@ -144,7 +130,6 @@ const GameContainer = () => {
       <ControlsHint />
       <NextPiecePreview nextPiece={nextPiece ? nextPiece.shape : null} />
       <LevelIndicator gridSize={gridSize} levelStatus={levelStatus} />
-      {/* highlight-start */}
       {isGameOver ? (
         <div style={{
             position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
@@ -194,7 +179,6 @@ const GameContainer = () => {
         // During active gameplay, the restart button is in the corner
         <RestartButton onRestart={resetGame} />
       )}
-      {/* highlight-end */}
       <div style={{ width: gameAreaSize.width, height: gameAreaSize.height }}>
         <GameBoard
           gridSize={gridSize}
@@ -209,4 +193,4 @@ const GameContainer = () => {
   );
 };
 
-export default GameContainer; 
+export default GameContainer;
