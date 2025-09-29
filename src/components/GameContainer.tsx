@@ -10,11 +10,9 @@ import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
 
 const GameContainer = () => {
-  // --- SELECTORS: Subscribing to state slices from the store ---
+  // --- SELECTORS ---
   const {
-    // highlight-start
     gameState, gridSize, grid, currentPiece, clearingBlocks, explodingBlocks,
-    // highlight-end
     score, level, timePassed, cubesPlayed, nextPiece,
     settings, isAnimating
   } = useGameStore(state => ({
@@ -23,7 +21,7 @@ const GameContainer = () => {
     grid: state.grid,
     currentPiece: state.currentPiece,
     clearingBlocks: state.clearingBlocks,
-    explodingBlocks: state.explodingBlocks, // Add selector
+    explodingBlocks: state.explodingBlocks,
     score: state.score,
     level: state.level,
     timePassed: state.timePassed,
@@ -33,11 +31,31 @@ const GameContainer = () => {
     isAnimating: state.isAnimating
   }));
   
-  // --- ACTIONS: Getting actions from the store ---
-  const { resetGame, movePiece, rotatePiece, hardDrop, tick, updateTime } = useGameStore.getState();
+  // --- ACTIONS ---
+  const { resetGame, movePiece, rotatePiece, hardDrop, tick, updateTime, submitHighscore } = useGameStore.getState();
 
+  // --- LOCAL STATE for UI ---
+  const [playerName, setPlayerName] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+  
   const gameAreaSize = useResponsiveGameSize();
   const isGameOver = gameState === 'gameOver';
+
+  // Reset submitted state on game restart
+  useEffect(() => {
+    if (gameState === 'playing') {
+      setSubmitted(false);
+      setPlayerName('');
+    }
+  }, [gameState]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (playerName.trim() && !submitted) {
+      submitHighscore(playerName.trim());
+      setSubmitted(true);
+    }
+  };
 
   // --- DERIVED STATE & PROPS ---
   const levelStatus = useMemo(() => {
@@ -57,39 +75,13 @@ const GameContainer = () => {
     return status;
   }, [grid, gridSize]);
   
-  const { submitHighscore } = useGameStore.getState();
-  const [playerName, setPlayerName] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-
-  // Reset submitted state on game restart
-  useEffect(() => {
-    if (gameState === 'playing') {
-      setSubmitted(false);
-      setPlayerName('');
-    }
-  }, [gameState]);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (playerName.trim() && !submitted) {
-      submitHighscore(playerName.trim());
-      setSubmitted(true);
-    }
-  };
-
-
   const cameraSettings = settings ? CAMERA_SETTINGS[settings.size] : CAMERA_SETTINGS['S'];
 
-  // --- HOOKS for side effects (intervals, event listeners) ---
-  
-  // Game tick interval
+  // --- HOOKS ---
   const dropInterval = useGameStore(state => state.dropInterval);
   useInterval(tick, isGameOver || isAnimating ? null : dropInterval);
-
-  // Time-passed interval
   useInterval(updateTime, isGameOver ? null : 100);
 
-  // Keyboard controls
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (isGameOver || isAnimating) return;
     const key = e.key.toLowerCase();
@@ -108,7 +100,6 @@ const GameContainer = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
-  // Game over restart listener
   useEffect(() => {
     if (!isGameOver) return;
     const handleRestart = () => resetGame();
@@ -120,7 +111,7 @@ const GameContainer = () => {
     };
   }, [isGameOver, resetGame]);
 
-  if (!settings) return null; // Should not happen if gameState is 'playing'
+  if (!settings) return null;
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -128,36 +119,40 @@ const GameContainer = () => {
       <ControlsHint />
       <NextPiecePreview nextPiece={nextPiece ? nextPiece.shape : null} />
       <LevelIndicator gridSize={gridSize} levelStatus={levelStatus} />
+      {/* highlight-start */}
       {isGameOver ? (
-          <div style={{...}}>
-              <h2 style={{...}}>GAME OVER</h2>
-              {submitted ? (
-                  <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Score Submitted! Thanks for playing.</p>
-              ) : (
-                  <form onSubmit={handleSubmit}>
-                      <input
-                          type="text"
-                          value={playerName}
-                          onChange={(e) => setPlayerName(e.target.value)}
-                          placeholder="Enter Your Name (max 20 chars)"
-                          maxLength={20}
-                          style={{ padding: '10px', fontSize: '1em', marginRight: '10px', textAlign: 'center' }}
-                      />
-                      <button type="submit" style={{ padding: '10px 20px', fontSize: '1em' }}>Submit Score</button>
-                  </form>
-              )}
-              <p style={{ fontSize: '1.2em', marginTop: '20px' }}>Press any key to restart</p>
-          </div>
+        <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center', color: 'white', zIndex: 1000, textShadow: '2px 2px 4px #000' }}>
+          <h2 style={{ color: 'red', fontSize: '3em', margin: 0 }}>GAME OVER</h2>
+          {submitted ? (
+            <p style={{ fontSize: '1.2em', marginTop: '10px' }}>Score Submitted! Thanks for playing.</p>
+          ) : (
+            <form onSubmit={handleSubmit} style={{ marginTop: '20px' }}>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => setPlayerName(e.target.value)}
+                placeholder="Enter Your Name (max 20 chars)"
+                maxLength={20}
+                style={{ padding: '10px', fontSize: '1em', marginRight: '10px', textAlign: 'center', borderRadius: '5px', border: '1px solid #555', background: '#333', color: 'white' }}
+              />
+              <button type="submit" style={{ padding: '10px 20px', fontSize: '1em', cursor: 'pointer', borderRadius: '5px', border: 'none', background: '#28a745', color: 'white' }}>
+                Submit Score
+              </button>
+            </form>
+          )}
+          <p style={{ fontSize: '1.2em', marginTop: '20px' }}>Press any key to restart</p>
+        </div>
       ) : (
-          <RestartButton onRestart={resetGame} />
+        <RestartButton onRestart={resetGame} />
       )}
+      {/* highlight-end */}
       <div style={{ width: gameAreaSize.width, height: gameAreaSize.height }}>
         <GameBoard
           gridSize={gridSize}
           gridState={grid}
           currentPiece={currentPiece}
           clearingBlocks={clearingBlocks}
-          explodingBlocks={explodingBlocks} // Pass the new prop
+          explodingBlocks={explodingBlocks}
           cameraSettings={cameraSettings}
         />
       </div>
@@ -165,4 +160,4 @@ const GameContainer = () => {
   );
 };
 
-export default GameContainer;
+export default GameContainer; 
