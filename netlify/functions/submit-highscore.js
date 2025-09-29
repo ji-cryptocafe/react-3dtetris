@@ -1,6 +1,8 @@
 import { neon } from '@netlify/neon';
 
-export default async (req: Request) => {
+// highlight-start
+export default async (req) => {
+// highlight-end
   try {
     const { playerName, score } = await req.json();
 
