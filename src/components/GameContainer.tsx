@@ -5,7 +5,8 @@ import StatsDisplay from './StatsDisplay';
 import ControlsHint from './ControlsHint';
 import RestartButton from './RestartButton';
 import NextPiecePreview from './NextPiecePreview';
-import HighscoreDisplay from './HighscoreDisplay'; // Import the new component
+import HighscoreDisplay from './HighscoreDisplay';
+import HeldPieceDisplay from './HeldPieceDisplay';
 import { useInterval } from '../hooks/useInterval';
 import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
@@ -15,7 +16,8 @@ const GameContainer = () => {
   const {
     gameState, gridSize, grid, currentPiece, clearingBlocks, explodingBlocks,
     score, level, timePassed, cubesPlayed, nextPiece,
-    settings, isAnimating
+    settings, isAnimating,
+    holdPiece 
   } = useGameStore(state => ({
     gameState: state.gameState,
     gridSize: state.gridSize,
@@ -29,13 +31,12 @@ const GameContainer = () => {
     cubesPlayed: state.cubesPlayed,
     nextPiece: state.nextPiece,
     settings: state.settings,
-    isAnimating: state.isAnimating
+    isAnimating: state.isAnimating,
+    holdPiece: state.holdPiece // Add this
   }));
   
   // --- ACTIONS ---
-  const { resetGame, movePiece, rotatePiece, hardDrop, tick, updateTime, submitHighscore } = useGameStore.getState();
-
-  // --- LOCAL STATE for UI ---
+  const { resetGame, movePiece, rotatePiece, hardDrop, tick, updateTime, submitHighscore, triggerHold } = useGameStore.getState();  // --- LOCAL STATE for UI ---
   const [playerName, setPlayerName] = useState('');
   // highlight-start
   const [hasSubmitted, setHasSubmitted] = useState(false);
@@ -101,11 +102,11 @@ const GameContainer = () => {
   useInterval(updateTime, isGameOver ? null : 100);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    // Prevent keyboard controls from affecting the input field
     if (e.target instanceof HTMLInputElement) return;
       
     if (isGameOver || isAnimating) return;
     const key = e.key.toLowerCase();
+    
     if (key === 'a' || key === 'arrowleft') movePiece([-1, 0, 0]);
     else if (key === 'd' || key === 'arrowright') movePiece([1, 0, 0]);
     else if (key === 'w' || key === 'arrowup') movePiece([0, 0, 1]);
@@ -114,7 +115,12 @@ const GameContainer = () => {
     else if (key === 'e') rotatePiece('x');
     else if (key === 'r') rotatePiece('z');
     else if (key === ' ') { e.preventDefault(); hardDrop(); }
-  }, [isGameOver, isAnimating, movePiece, rotatePiece, hardDrop]);
+    // highlight-start
+    // Add Hold Trigger
+    else if (key === 'c' || key === 'shift') { triggerHold(); }
+    // highlight-end
+
+  }, [isGameOver, isAnimating, movePiece, rotatePiece, hardDrop, triggerHold]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -129,6 +135,7 @@ const GameContainer = () => {
       <StatsDisplay score={score} speedLevel={level} time={timePassed} cubesPlayed={cubesPlayed} />
       <ControlsHint />
       <NextPiecePreview nextPiece={nextPiece ? nextPiece.shape : null} />
+      <HeldPieceDisplay heldPiece={holdPiece ? holdPiece.shape : null} /> 
       <LevelIndicator gridSize={gridSize} levelStatus={levelStatus} />
       {isGameOver ? (
         <div style={{
@@ -142,7 +149,7 @@ const GameContainer = () => {
           <h2 style={{ color: '#ff4d4d', fontSize: '3em', margin: 0, textShadow: '2px 2px 8px #000' }}>GAME OVER</h2>
           
           {/* Submission Form and Message Container */}
-          <div style={{ height: '60px', marginTop: '20px' }}>
+          <div style={{ height: '60px', marginTop: '10px' }}>
             {showSubmittedMessage && (
                 <p style={{ fontSize: '1.2em', color: '#28a745' }}>Score Submitted!</p>
             )}

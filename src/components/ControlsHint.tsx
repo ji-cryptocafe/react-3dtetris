@@ -73,6 +73,9 @@ const ControlsHint = () => {
         <Key>R</Key> Rotate
       </div>
       <div>
+        <Key>C</Key> / <Key>Shift</Key> Hold
+      </div>
+      <div>
         <Key>Space</Key> Hard Drop
       </div>
     </div>

@@ -1,34 +1,40 @@
-import { useEffect, useCallback, useMemo } from 'react';
+import { useEffect, useCallback, useMemo, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
+import { OrbitControls, Instances, Instance, CameraShake, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { useSpring, animated } from '@react-spring/three';
 import { GridDisplay } from './GridDisplay';
 import ProjectionHighlights from './ProjectionHighlights';
 import FallingPiece from './FallingPiece';
-// highlight-start
-import { type Shape, type Grid, CELL_SIZE, PALETTE, type ExplodingBlock as ExplodingBlockData  } from '../store/gameStore';
-// highlight-end
+import Effects from './Effects';
+import { type Shape, type Grid, CELL_SIZE, PALETTE, type ExplodingBlock as ExplodingBlockData, useGameStore } from '../store/gameStore';
+
+const AnimatedInstance = animated(Instance);
 
 interface BlockProps {
-  position: THREE.Vector3; color: string; isClearing: boolean;
+  position: THREE.Vector3; 
+  color: string; 
+  isClearing: boolean;
 }
 
 const Block = ({ position, color, isClearing }: BlockProps) => {
-  const [spring, api] = useSpring(() => ({ scale: [1, 1, 1], position: position.toArray(), config: { mass: 1, tension: 300, friction: 30 }, }));
-  useEffect(() => {
-    if (isClearing) { api.start({ to: { scale: [0, 0, 0] } }); } 
-    else { api.start({ to: { position: position.toArray(), scale: [1, 1, 1] } }); }
-  }, [position, isClearing, api]);
+  const { scale, pos } = useSpring({
+    to: {
+      pos: position.toArray(),
+      scale: isClearing ? [0, 0, 0] : [1, 1, 1],
+    },
+    config: { mass: 1, tension: 300, friction: 30 },
+  });
+
   return (
-    <animated.mesh position={spring.position as any} scale={spring.scale as any}>
-      <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
-      <meshStandardMaterial color={color} />
-    </animated.mesh>
+    <AnimatedInstance 
+      color={color} 
+      position={pos as any} 
+      scale={scale as any} 
+    />
   );
 };
 
-// highlight-start
 interface ExplodingBlockProps {
     initialPosition: THREE.Vector3;
     velocity: THREE.Vector3;
@@ -53,18 +59,53 @@ const ExplodingBlock = ({ initialPosition, velocity, color }: ExplodingBlockProp
     return (
       <animated.mesh position={pos as any} scale={scale as any}>
         <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
-        <animated.meshStandardMaterial color={color} opacity={opacity} transparent />
+        <animated.meshStandardMaterial 
+            color={color} 
+            opacity={opacity} 
+            transparent 
+            toneMapped={false} 
+            emissive={color}
+            emissiveIntensity={2} 
+        />
       </animated.mesh>
     );
 };
-// highlight-end
+
+const ImpactShake = () => {
+    const triggerShake = useGameStore(state => state.triggerShake);
+    const [isShaking, setIsShaking] = useState(false);
+
+    useEffect(() => {
+        if (triggerShake > 0) {
+            setIsShaking(true);
+            const timer = setTimeout(() => setIsShaking(false), 200);
+            return () => clearTimeout(timer);
+        }
+    }, [triggerShake]);
+
+    if (!isShaking) return null;
+
+    return (
+        <CameraShake 
+            maxYaw={0.02}
+            maxPitch={0.02}
+            maxRoll={0.05} 
+            yawFrequency={10}
+            pitchFrequency={10} 
+            rollFrequency={2}
+            intensity={1}
+            decay={true}
+            decayRate={0.9}
+        />
+    );
+}
 
 interface GameBoardProps {
   gridSize: [number, number, number];
   gridState: Grid;
   currentPiece: Shape | null;
   clearingBlocks: Shape;
-  explodingBlocks: ExplodingBlockData[]; // Add new prop
+  explodingBlocks: ExplodingBlockData[];
   cameraSettings: { position: [number, number, number]; fov: number };
 }
 
@@ -78,47 +119,104 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
     );
   }, [gridSize]);
 
-  // highlight-start
   const clearingCoords = useMemo(() => {
     const coords = new Set<string>();
     clearingBlocks.forEach(b => coords.add(b.join(',')));
     return coords;
   }, [clearingBlocks]);
-  // highlight-end
+
+  const MAX_INSTANCES = 4000;
 
   return (
     <div style={{ width: '100%', height: '100%' }}>
-      <Canvas camera={cameraSettings}>
-        <ambientLight intensity={0.6} />
-        <directionalLight position={[100, 200, 150]} intensity={0.8} />
+      <Canvas camera={cameraSettings} dpr={[1, 2]} shadows> 
+        <color attach="background" args={['#050505']} />
+        
+        {/* HDR Environment for realistic reflections */}
+        <Environment preset="city" />
+        
+        <Effects />
+        
+        {/* ENHANCED LIGHTING FOR DRAMATIC EFFECT */}
+        <ambientLight intensity={0.2} /> 
+        
+        {/* Key light - main illumination from above */}
+        <directionalLight 
+          position={[50, 100, 50]} 
+          intensity={1.1} 
+          castShadow
+          shadow-mapSize-width={2048}
+          shadow-mapSize-height={2048}
+        />
+        
+        {/* Fill light - softer light from the side */}
+        <directionalLight 
+          position={[-50, 50, -50]} 
+          intensity={0.6} 
+          color="#4488ff"
+        />
+        
+        {/* Rim light - creates edge highlights */}
+        <directionalLight 
+          position={[0, -50, 100]} 
+          intensity={1.8} 
+          color="#ff6644"
+        />
+        
+        {/* Hemisphere light for ambient fill */}
+        <hemisphereLight 
+          intensity={0.5} 
+          groundColor="#1a1a2e" 
+          color="#ffffff"
+        />
+        
+        {/* Subtle point lights for depth */}
+        <pointLight position={[100, 100, 100]} intensity={0.4} distance={400} decay={2} color="#00ff88" />
+        <pointLight position={[-100, 100, -100]} intensity={0.4} distance={400} decay={2} color="#ff0088" />
+         
+
         <OrbitControls enableRotate={false} enablePan={false} enableZoom={true} minDistance={200} maxDistance={1000} />
+        
+        {/* SHAKE EFFECT */}
+        <ImpactShake />
+
         <group rotation={[-Math.PI / 2, 0, 0]}>
           <GridDisplay gridSize={gridSize} />
           <ProjectionHighlights gridSize={gridSize} currentPiece={currentPiece} />
           <FallingPiece gridSize={gridSize} piece={currentPiece} />
-          {gridState.map((row: (number | string)[][], x: number) =>
-            row.map((col: (number | string)[], y: number) =>
-              col.map((cellValue: number | string, z: number) => {
-                if (cellValue !== 0) {
-                  const pos = getWorldPosition(x, y, z);
-                  const color = PALETTE[y % PALETTE.length];
-                  // highlight-start
-                  const coordKey = `${x},${y},${z}`;
-                  const isClearing = clearingCoords.has(coordKey);
-                  return <Block key={coordKey} position={pos} color={color} isClearing={isClearing} />;
-                  // highlight-end
-                }
-                return null;
-              })
-            )
-          )}
-          {/* highlight-start */}
+          
+          <Instances range={MAX_INSTANCES}>
+            <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
+            <meshStandardMaterial 
+                roughness={0.09}
+                metalness={0.11}
+                envMapIntensity={1.5}
+                emissive="#ffffff"
+                emissiveIntensity={0.02}
+            />
+
+            {gridState.map((row: (number | string)[][], x: number) =>
+              row.map((col: (number | string)[], y: number) =>
+                col.map((cellValue: number | string, z: number) => {
+                  if (cellValue !== 0) {
+                    const pos = getWorldPosition(x, y, z);
+                    const color = PALETTE[y % PALETTE.length];
+                    const coordKey = `${x},${y},${z}`;
+                    const isClearing = clearingCoords.has(coordKey);
+                    
+                    return <Block key={coordKey} position={pos} color={color} isClearing={isClearing} />;
+                  }
+                  return null;
+                })
+              )
+            )}
+          </Instances>
+
           {explodingBlocks.map((block, index) => {
               const pos = getWorldPosition(block.position[0], block.position[1], block.position[2]);
               const vel = new THREE.Vector3(...block.velocity);
               return <ExplodingBlock key={`exploding-${index}`} initialPosition={pos} velocity={vel} color={block.color}/>
           })}
-          {/* highlight-end */}
         </group>
       </Canvas>
     </div>

@@ -15,11 +15,15 @@ const Tube = ({ start, end }: TubeProps) => {
   return (
     <mesh>
       <tubeGeometry args={[path, 1, LINE_RADIUS, 8, false]} />
+      {/* highlight-start */}
+      {/* Make the falling piece glow intensely */}
       <meshStandardMaterial
         color={FALLING_PIECE_COLOR}
         emissive={FALLING_PIECE_COLOR}
-        emissiveIntensity={0.5}
+        emissiveIntensity={3} 
+        toneMapped={false}
       />
+      {/* highlight-end */}
     </mesh>
   );
 };

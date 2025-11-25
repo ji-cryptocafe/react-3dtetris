@@ -49,6 +49,14 @@ type GameState = {
   grid: Grid;
   currentPiece: Shape | null;
   nextPiece: PieceObject | null;
+
+  // NEW: Track the definition of the current piece so we can hold it
+  currentPieceType: PieceObject | null; 
+  // NEW: The piece currently in the hold slot
+  holdPiece: PieceObject | null;
+  // NEW: Prevent swapping multiple times per turn
+  isHoldUsed: boolean;
+
   isAnimating: boolean;
   clearingBlocks: Shape;
   explodingBlocks: ExplodingBlock[]; // New state for exploding blocks
@@ -69,11 +77,15 @@ type GameState = {
   currentPieceTier: number;
   currentPieceTranslations: number;
   currentPieceRotations: number;
+
   isB2BActive: boolean;
   difficultClearHistory: number[];
 
   highscores: Highscore[];
   highscoreState: 'idle' | 'loading' | 'error';
+
+  // NEW: Track shake event
+  triggerShake: number; 
 
   // --- ACTIONS ---
   initGame: (settings: GameSettings) => void;
@@ -87,6 +99,7 @@ type GameState = {
   updateTime: () => void;
   fetchHighscores: () => Promise<void>;
   submitHighscore: (playerName: string) => Promise<void>;
+  triggerHold: () => void; // NEW Action
 };
 
 const createEmptyGrid = (gridSize: [number, number, number]): Grid => Array.from({ length: gridSize[0] }, () => Array.from({ length: gridSize[1] }, () => Array(gridSize[2]).fill(0)));
@@ -119,6 +132,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     
     highscores: [],
     highscoreState: 'idle',
+    triggerShake: 0, // Initialize to 0
+
+    currentPieceType: null, // NEW
+    holdPiece: null,        // NEW
+    isHoldUsed: false,      // NEW
 
     // --- ACTIONS ---
     initGame: (settings) => {
@@ -172,6 +190,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             currentPieceTier: firstPiece.tier,
             currentPieceTranslations: 0,
             currentPieceRotations: 0,
+            currentPieceType: firstPiece, // NEW: Store the type
+            holdPiece: null,              // NEW: Reset hold
+            isHoldUsed: false,            // NEW: Reset hold usage
         });
     },
 
@@ -194,14 +215,61 @@ export const useGameStore = create<GameState>((set, get) => ({
         } else {
             set({
                 currentPiece: newCurrentPiece,
+                currentPieceType: pieceToSpawn, // NEW: Update the type
                 currentPieceTier: pieceToSpawn.tier,
                 currentPieceTranslations: 0,
                 currentPieceRotations: 0,
                 nextPiece: generateRandomPiece(),
+                isHoldUsed: false, // NEW: Reset hold usage on new spawn
             });
         }
     },
     
+    // --- NEW ACTION: HOLD PIECE ---
+    triggerHold: () => {
+        const { 
+            gameState, isHoldUsed, currentPieceType, holdPiece, 
+            gridSize, createNewPiece, isAnimating 
+        } = get();
+
+        // Validation: Must be playing, haven't swapped yet, not animating, and valid piece exists
+        if (gameState !== 'playing' || isHoldUsed || !currentPieceType || isAnimating) return;
+
+        // Helper to spawn piece at top center
+        const spawnPiece = (shape: Shape) => 
+            shape.map(block => [ 
+                block[0] + Math.floor(gridSize[0] / 2) - 1, 
+                block[1], 
+                block[2] + Math.floor(gridSize[2] / 2) - 1 
+            ] as Vector3);
+
+        // CASE 1: Hold is empty
+        if (!holdPiece) {
+            set({
+                holdPiece: currentPieceType, // Stash current
+                currentPiece: null,          // Clear board momentarily
+                isHoldUsed: true             // Mark used
+            });
+            // Spawn the next piece from the queue (standard flow)
+            createNewPiece(); 
+        } 
+        // CASE 2: Swap with existing hold piece
+        else {
+            const pieceToSpawn = holdPiece;
+            const newCurrentPiece = spawnPiece(pieceToSpawn.shape);
+
+            set({
+                holdPiece: currentPieceType,      // Stash current
+                currentPiece: newCurrentPiece,    // Spawn the held piece
+                currentPieceType: pieceToSpawn,   // Update type tracker
+                currentPieceTier: pieceToSpawn.tier,
+                currentPieceTranslations: 0,
+                currentPieceRotations: 0,
+                isHoldUsed: true                  // Mark used
+            });
+        }
+    },
+
     processLandedPiece: (landedPiece, dropInfo) => {
         set({ isAnimating: true, currentPiece: null });
         const {
@@ -338,6 +406,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     hardDrop: () => {
         const { currentPiece, isAnimating, grid, gridSize, processLandedPiece } = get();
         if (!currentPiece || isAnimating) return;
+
+        // NEW: Trigger the shake by setting the current timestamp
+        set({ triggerShake: Date.now() });
 
         let dropDistance = 0;
         let landedPiece = currentPiece;

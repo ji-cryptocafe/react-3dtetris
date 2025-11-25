@@ -15,11 +15,12 @@ const HighscoreDisplay = () => {
 
   return (
     <div style={{
-      marginTop: '20px',
+      marginTop: '10px',
       marginBottom: '20px',
       width: '100%',
       maxWidth: '300px',
-      color: '#ccc',
+      height: '100px',
+        overflow: 'hidden'
     }}>
       <h3 style={{ margin: '0 0 10px 0', borderBottom: '1px solid #555', paddingBottom: '5px' }}>Leaderboard</h3>
       {highscoreState === 'loading' && <p>Loading scores...</p>}
