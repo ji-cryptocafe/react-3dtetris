@@ -6,8 +6,10 @@ import { useSpring, animated } from '@react-spring/three';
 import { GridDisplay } from './GridDisplay';
 import ProjectionHighlights from './ProjectionHighlights';
 import FallingPiece from './FallingPiece';
+import GhostPiece from './GhostPiece';
 import Effects from './Effects';
-import { type Shape, type Grid, CELL_SIZE, PALETTE, type ExplodingBlock as ExplodingBlockData, useGameStore } from '../store/gameStore';
+import { type Shape, type Grid, CELL_SIZE, PALETTE, type ExplodingBlock as ExplodingBlockData, useGameStore, type Vector3 } from '../store/gameStore';
+import { getHardDropDistance } from '../game/engine';
 
 const AnimatedInstance = animated(Instance);
 
@@ -119,6 +121,27 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
     );
   }, [gridSize]);
 
+  // --- CALCULATE GHOST PIECE POSITION ---
+  const ghostPiece = useMemo(() => {
+    if (!currentPiece) return null;
+    
+    // Calculate how far it can drop
+    const dropDistance = getHardDropDistance(currentPiece, gridState, gridSize);
+    
+    // If it can't drop at all (already on ground), don't show ghost or show at current pos? 
+    // Usually show at current pos if distance is 0, but to avoid visual Z-fighting with 
+    // the real piece, we might want to hide it if distance is 0, or just let depthWrite handles it.
+    if (dropDistance === 0) return null;
+
+    // Apply distance to create the ghost shape
+    return currentPiece.map(block => [
+        block[0], 
+        block[1] + dropDistance, 
+        block[2]
+    ] as Vector3);
+
+  }, [currentPiece, gridState, gridSize]);
+
   const clearingCoords = useMemo(() => {
     const coords = new Set<string>();
     clearingBlocks.forEach(b => coords.add(b.join(',')));
@@ -184,7 +207,7 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
           <GridDisplay gridSize={gridSize} />
           <ProjectionHighlights gridSize={gridSize} currentPiece={currentPiece} />
           <FallingPiece gridSize={gridSize} piece={currentPiece} />
-          
+          <GhostPiece gridSize={gridSize} piece={ghostPiece} />
           <Instances range={MAX_INSTANCES}>
             <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
             <meshStandardMaterial 

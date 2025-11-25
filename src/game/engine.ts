@@ -13,18 +13,33 @@ import { type Shape, type Grid, type Vector3 } from "../store/gameStore";
  * @returns `true` if the move is valid, otherwise `false`.
  */
 export const isValidMove = (piece: Shape, grid: Grid, gridSize: Vector3): boolean => {
-    for (const block of piece) {
-        const [x, y, z] = block;
-        if (
-            x < 0 || x >= gridSize[0] ||
-            y >= gridSize[1] || // Note: We allow y < 0 for spawning above the grid
-            z < 0 || z >= gridSize[2] ||
-            (y >= 0 && grid[x]?.[y]?.[z] !== 0) // Only check for block collision inside the grid
-        ) {
-            return false;
-        }
-    }
-    return true;
+  for (const block of piece) {
+      const [x, y, z] = block;
+      if (
+          x < 0 || x >= gridSize[0] ||
+          y >= gridSize[1] || // Note: We allow y < 0 for spawning above the grid
+          z < 0 || z >= gridSize[2] ||
+          (y >= 0 && grid[x]?.[y]?.[z] !== 0) // Only check for block collision inside the grid
+      ) {
+          return false;
+      }
+  }
+  return true;
+};
+
+export const getHardDropDistance = (piece: Shape, grid: Grid, gridSize: Vector3): number => {
+  let distance = 0;
+  while (true) {
+      const nextDistance = distance + 1;
+      // Construct a test piece shifted down by nextDistance
+      const testPiece = piece.map(b => [b[0], b[1] + nextDistance, b[2]] as Vector3);
+      
+      if (!isValidMove(testPiece, grid, gridSize)) {
+          break;
+      }
+      distance = nextDistance;
+  }
+  return distance;
 };
 
 /**
