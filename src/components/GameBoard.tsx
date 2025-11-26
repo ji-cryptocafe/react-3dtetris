@@ -198,7 +198,7 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
         <pointLight position={[-100, 100, -100]} intensity={0.4} distance={400} decay={2} color="#ff0088" />
          
 
-        <OrbitControls enableRotate={false} enablePan={false} enableZoom={true} minDistance={200} maxDistance={1000} />
+        <OrbitControls enableRotate={false} enablePan={false} enableZoom={false} minDistance={200} maxDistance={1000} />
         
         {/* SHAKE EFFECT */}
         <ImpactShake />
