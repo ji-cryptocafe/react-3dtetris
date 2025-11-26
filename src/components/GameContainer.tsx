@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import GameBoard from './GameBoard';
 import LevelIndicator from './LevelIndicator';
 import StatsDisplay from './StatsDisplay';
@@ -10,8 +10,9 @@ import HeldPieceDisplay from './HeldPieceDisplay';
 import { useInterval } from '../hooks/useInterval';
 import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
+import { useTetrisControls } from '../hooks/useTetrisControls'; // Import Hook
 
-// NEW COMPONENT: Flash Overlay
+
 const ScreenFlash = () => {
   const { triggerShake, shakeIntensity } = useGameStore(state => ({
       triggerShake: state.triggerShake,
@@ -62,21 +63,28 @@ const GameContainer = () => {
     nextPiece: state.nextPiece,
     settings: state.settings,
     isAnimating: state.isAnimating,
-    holdPiece: state.holdPiece // Add this
+    holdPiece: state.holdPiece
   }));
   
   // --- ACTIONS ---
   const { resetGame, movePiece, rotatePiece, hardDrop, tick, updateTime, submitHighscore, triggerHold } = useGameStore.getState();  // --- LOCAL STATE for UI ---
   const [playerName, setPlayerName] = useState('');
-  // highlight-start
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [showSubmittedMessage, setShowSubmittedMessage] = useState(false);
-  // highlight-end
   
   const gameAreaSize = useResponsiveGameSize();
   const isGameOver = gameState === 'gameOver';
+  const isPlaying = gameState === 'playing' && !isGameOver && !isAnimating;
 
-  // highlight-start
+  // --- PRO CONTROLS HOOK ---
+  useTetrisControls({
+    movePiece,
+    rotatePiece,
+    hardDrop,
+    triggerHold,
+    isPlaying // Pass the calculated playing state
+  });
+
   // Reset UI state when a new game starts
   useEffect(() => {
     if (gameState === 'playing') {
@@ -104,7 +112,6 @@ const GameContainer = () => {
       setShowSubmittedMessage(true);
     }
   };
-  // highlight-end
 
   // --- DERIVED STATE & PROPS ---
   const levelStatus = useMemo(() => {
@@ -131,33 +138,7 @@ const GameContainer = () => {
   useInterval(tick, isGameOver || isAnimating ? null : dropInterval);
   useInterval(updateTime, isGameOver ? null : 100);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (e.target instanceof HTMLInputElement) return;
-      
-    if (isGameOver || isAnimating) return;
-    const key = e.key.toLowerCase();
-    
-    if (key === 'a' || key === 'arrowleft') movePiece([-1, 0, 0]);
-    else if (key === 'd' || key === 'arrowright') movePiece([1, 0, 0]);
-    else if (key === 'w' || key === 'arrowup') movePiece([0, 0, 1]);
-    else if (key === 's' || key === 'arrowdown') movePiece([0, 0, -1]);
-    else if (key === 'q') rotatePiece('y');
-    else if (key === 'e') rotatePiece('x');
-    else if (key === 'r') rotatePiece('z');
-    else if (key === ' ') { e.preventDefault(); hardDrop(); }
-    // highlight-start
-    // Add Hold Trigger
-    else if (key === 'c' || key === 'shift') { triggerHold(); }
-    // highlight-end
-
-  }, [isGameOver, isAnimating, movePiece, rotatePiece, hardDrop, triggerHold]);
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
-
-
+  
   if (!settings) return null;
 
   return (
