@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useMemo, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { useEffect, useCallback, useMemo, useState, useRef } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Instances, Instance, CameraShake, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import { useSpring, animated } from '@react-spring/three';
@@ -43,63 +43,84 @@ interface ExplodingBlockProps {
     color: string;
 }
   
+// --- IMPROVED EXPLODING BLOCK ---
 const ExplodingBlock = ({ initialPosition, velocity, color }: ExplodingBlockProps) => {
-    const { pos, scale, opacity } = useSpring({
-      from: {
-        pos: initialPosition.toArray(),
-        scale: [1, 1, 1],
-        opacity: 1,
-      },
-      to: {
-        pos: initialPosition.clone().add(velocity).toArray(),
-        scale: [0.1, 0.1, 0.1],
-        opacity: 0,
-      },
-      config: { mass: 1.5, tension: 150, friction: 40 },
-    });
-  
-    return (
-      <animated.mesh position={pos as any} scale={scale as any}>
-        <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
-        <animated.meshStandardMaterial 
-            color={color} 
-            opacity={opacity} 
-            transparent 
-            toneMapped={false} 
-            emissive={color}
-            emissiveIntensity={2} 
-        />
-      </animated.mesh>
-    );
+  // Random rotation speed
+  const rotationSpeed = useRef([
+      (Math.random() - 0.5) * 0.5, 
+      (Math.random() - 0.5) * 0.5, 
+      (Math.random() - 0.5) * 0.5
+  ]);
+  const meshRef = useRef<THREE.Mesh>(null!);
+
+  const { pos, scale, opacity } = useSpring({
+    from: {
+      pos: initialPosition.toArray(),
+      scale: [1, 1, 1],
+      opacity: 1,
+    },
+    to: {
+      pos: initialPosition.clone().add(velocity).toArray(),
+      scale: [0.1, 0.1, 0.1],
+      opacity: 0,
+    },
+    config: { mass: 1.0, tension: 120, friction: 30 }, // Lower friction for flying further
+  });
+
+  // Rotate frame by frame
+  useFrame(() => {
+      if(meshRef.current) {
+          meshRef.current.rotation.x += rotationSpeed.current[0];
+          meshRef.current.rotation.y += rotationSpeed.current[1];
+          meshRef.current.rotation.z += rotationSpeed.current[2];
+      }
+  });
+
+  return (
+    <animated.mesh ref={meshRef} position={pos as any} scale={scale as any}>
+      <boxGeometry args={[CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.9]} />
+      <animated.meshStandardMaterial 
+          color={color} 
+          opacity={opacity} 
+          transparent 
+          toneMapped={false} 
+          emissive={color}
+          emissiveIntensity={4} // Make them glow brighter
+      />
+    </animated.mesh>
+  );
 };
 
 const ImpactShake = () => {
-    const triggerShake = useGameStore(state => state.triggerShake);
-    const [isShaking, setIsShaking] = useState(false);
+  const { triggerShake, shakeIntensity } = useGameStore(state => ({
+      triggerShake: state.triggerShake,
+      shakeIntensity: state.shakeIntensity
+  }));
+  const [isShaking, setIsShaking] = useState(false);
 
-    useEffect(() => {
-        if (triggerShake > 0) {
-            setIsShaking(true);
-            const timer = setTimeout(() => setIsShaking(false), 200);
-            return () => clearTimeout(timer);
-        }
-    }, [triggerShake]);
+  useEffect(() => {
+      if (triggerShake > 0) {
+          setIsShaking(true);
+          const timer = setTimeout(() => setIsShaking(false), 350); // Longer shake
+          return () => clearTimeout(timer);
+      }
+  }, [triggerShake]);
 
-    if (!isShaking) return null;
+  if (!isShaking) return null;
 
-    return (
-        <CameraShake 
-            maxYaw={0.02}
-            maxPitch={0.02}
-            maxRoll={0.05} 
-            yawFrequency={10}
-            pitchFrequency={10} 
-            rollFrequency={2}
-            intensity={1}
-            decay={true}
-            decayRate={0.9}
-        />
-    );
+  return (
+      <CameraShake 
+          maxYaw={0.01 * shakeIntensity}
+          maxPitch={0.01 * shakeIntensity}
+          maxRoll={0.01 * shakeIntensity} 
+          yawFrequency={15}
+          pitchFrequency={15} 
+          rollFrequency={15}
+          intensity={1}
+          decay={true}
+          decayRate={0.8}
+      />
+  );
 }
 
 interface GameBoardProps {

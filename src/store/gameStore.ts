@@ -1,9 +1,7 @@
 import { create } from 'zustand';
-import * as THREE from 'three'; // Import THREE for Vector3
+import * as THREE from 'three';
 import { type GameSettings } from '../components/MainMenu';
 import * as engine from '../game/engine'; 
-
-// --- TYPES AND CONSTANTS ---
 
 export const CELL_SIZE = 30;
 export type Vector3 = [number, number, number];
@@ -14,17 +12,16 @@ export type PieceObject = { shape: Shape; tier: number };
 
 export type Highscore = { player_name: string; score: number };
 
-
-// highlight-start
-// Moved PALETTE here from GameBoard to be accessible by the store
 export const PALETTE = [ '#DC322F', '#859900', '#268BD2', '#D33682', '#2AA198', '#CB4B16', '#6C71C4', '#B58900' ];
+
+const ULTIMATE_COLOR = '#00FFFF';
+const TETRIS_COLOR = '#FFD700';
 
 export interface ExplodingBlock {
     position: Vector3;
     velocity: Vector3;
     color: string;
 }
-// highlight-end
 
 const SIZES: Record<GameSettings['size'], [number, number, number]> = { 'S': [8, 12, 8], 'M': [10, 15, 10], 'L': [13, 20, 13] };
 const SPEEDS: Record<GameSettings['difficulty'], number> = { 'Easy': 1200, 'Medium': 1000, 'Hard': 800 };
@@ -38,33 +35,25 @@ const SHAPES_TIER_1: ShapeDefinition[] = [ [[0,0,0], [1,0,0], [2,0,0], [3,0,0]],
 const SHAPES_TIER_2: ShapeDefinition[] = [ [[0,0,0], [1,0,0], [0,0,1], [1,0,1], [0,1,0], [1,1,0], [0,1,1], [1,1,1]], [[0,0,0], [1,0,0], [0,1,0], [0,0,1]], [[0,0,0], [1,0,0], [0,0,1], [1,0,1], [0,1,0]], [[0,0,0], [1,0,0], [2,0,0], [3,0,0], [0,1,0]], [[0,0,0], [1,0,0], [2,0,0], [3,0,0], [1,1,0]], [[0,0,0], [0,0,1], [1,0,1], [2,0,1], [2,0,0]], ];
 const SHAPES_TIER_3: ShapeDefinition[] = [ [[0,0,0], [1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]], [[0,0,0], [1,0,0], [1,1,0], [1,1,1], [2,1,1]], [[0,0,0], [1,0,0], [1,1,0], [1,1,1]], ];
 
-const ANIMATION_DURATION = 300; // Updated to 0.3 seconds as requested
+const ANIMATION_DURATION = 300;
 const MIN_DROP_INTERVAL = 100;
 
-// --- STORE STATE AND ACTIONS ---
-
 type GameState = {
-  // Core State
   gameState: 'menu' | 'playing' | 'gameOver';
   grid: Grid;
   currentPiece: Shape | null;
   nextPiece: PieceObject | null;
-
-  // NEW: Track the definition of the current piece so we can hold it
-  currentPieceType: PieceObject | null; 
-  // NEW: The piece currently in the hold slot
-  holdPiece: PieceObject | null;
-  // NEW: Prevent swapping multiple times per turn
-  isHoldUsed: boolean;
-
   isAnimating: boolean;
   clearingBlocks: Shape;
-  explodingBlocks: ExplodingBlock[]; // New state for exploding blocks
-  // Game Settings (set on init)
+  explodingBlocks: ExplodingBlock[];
+  
+  currentPieceType: PieceObject | null; 
+  holdPiece: PieceObject | null;
+  isHoldUsed: boolean;
+
   settings: GameSettings | null;
   gridSize: [number, number, number];
   initialDropInterval: number;
-  // Stats
   score: number;
   startTime: number | null;
   timePassed: number;
@@ -72,22 +61,18 @@ type GameState = {
   currentXP: number;
   cubesPlayed: number;
   dropInterval: number;
-  // Piece-specific state
   availableShapes: ShapeDefinition[];
   currentPieceTier: number;
   currentPieceTranslations: number;
   currentPieceRotations: number;
-
   isB2BActive: boolean;
   difficultClearHistory: number[];
 
   highscores: Highscore[];
   highscoreState: 'idle' | 'loading' | 'error';
-
-  // NEW: Track shake event
   triggerShake: number; 
+  shakeIntensity: number;
 
-  // --- ACTIONS ---
   initGame: (settings: GameSettings) => void;
   resetGame: () => void;
   createNewPiece: () => void;
@@ -95,24 +80,25 @@ type GameState = {
   movePiece: (delta: Vector3) => void;
   rotatePiece: (axis: 'x' | 'y' | 'z') => void;
   hardDrop: () => void;
+  
+  triggerHold: () => void; 
+  
   tick: () => void;
   updateTime: () => void;
   fetchHighscores: () => Promise<void>;
   submitHighscore: (playerName: string) => Promise<void>;
-  triggerHold: () => void; // NEW Action
 };
 
 const createEmptyGrid = (gridSize: [number, number, number]): Grid => Array.from({ length: gridSize[0] }, () => Array.from({ length: gridSize[1] }, () => Array(gridSize[2]).fill(0)));
 
 export const useGameStore = create<GameState>((set, get) => ({
-    // --- INITIAL STATE ---
     gameState: 'menu',
     grid: [],
     currentPiece: null,
     nextPiece: null,
     isAnimating: false,
     clearingBlocks: [],
-    explodingBlocks: [], // Add to initial state
+    explodingBlocks: [],
     settings: null,
     gridSize: [0,0,0],
     initialDropInterval: 1000,
@@ -129,16 +115,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     currentPieceRotations: 0,
     isB2BActive: false,
     difficultClearHistory: [],
-    
     highscores: [],
     highscoreState: 'idle',
-    triggerShake: 0, // Initialize to 0
+    triggerShake: 0,
+    shakeIntensity: 0,
+    
+    currentPieceType: null,
+    holdPiece: null,
+    isHoldUsed: false,
 
-    currentPieceType: null, // NEW
-    holdPiece: null,        // NEW
-    isHoldUsed: false,      // NEW
-
-    // --- ACTIONS ---
     initGame: (settings) => {
         set({ settings, gameState: 'playing' });
         get().resetGame();
@@ -180,25 +165,27 @@ export const useGameStore = create<GameState>((set, get) => ({
             dropInterval: initialDropInterval,
             cubesPlayed: 0,
             clearingBlocks: [],
-            explodingBlocks: [], // Reset on new game
+            explodingBlocks: [],
             isAnimating: false,
             availableShapes: initialShapes,
             isB2BActive: false,
             difficultClearHistory: [],
             nextPiece: nextPiece,
             currentPiece: initialCurrentPiece,
+            
+            currentPieceType: firstPiece,
+            holdPiece: null,
+            isHoldUsed: false,
+
             currentPieceTier: firstPiece.tier,
             currentPieceTranslations: 0,
             currentPieceRotations: 0,
-            currentPieceType: firstPiece, // NEW: Store the type
-            holdPiece: null,              // NEW: Reset hold
-            isHoldUsed: false,            // NEW: Reset hold usage
         });
     },
 
     createNewPiece: () => {
-        // const { nextPiece, availableShapes, gridSize, grid } = get();
-        const { nextPiece, availableShapes, gridSize, grid, fetchHighscores } = get(); // Add fetchHighscores
+        const { nextPiece, availableShapes, gridSize, grid, fetchHighscores } = get();
+        
         const generateRandomPiece = (): PieceObject => {
             const shape = availableShapes[Math.floor(Math.random() * availableShapes.length)];
             let tier = 1;
@@ -211,31 +198,28 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if (!engine.isValidMove(newCurrentPiece, grid, gridSize)) {
             set({ gameState: 'gameOver', currentPiece: null });
-            fetchHighscores(); // Fetch scores when the game ends
+            fetchHighscores();
         } else {
             set({
                 currentPiece: newCurrentPiece,
-                currentPieceType: pieceToSpawn, // NEW: Update the type
+                currentPieceType: pieceToSpawn,
                 currentPieceTier: pieceToSpawn.tier,
                 currentPieceTranslations: 0,
                 currentPieceRotations: 0,
                 nextPiece: generateRandomPiece(),
-                isHoldUsed: false, // NEW: Reset hold usage on new spawn
+                isHoldUsed: false,
             });
         }
     },
     
-    // --- NEW ACTION: HOLD PIECE ---
     triggerHold: () => {
         const { 
             gameState, isHoldUsed, currentPieceType, holdPiece, 
             gridSize, createNewPiece, isAnimating 
         } = get();
 
-        // Validation: Must be playing, haven't swapped yet, not animating, and valid piece exists
         if (gameState !== 'playing' || isHoldUsed || !currentPieceType || isAnimating) return;
 
-        // Helper to spawn piece at top center
         const spawnPiece = (shape: Shape) => 
             shape.map(block => [ 
                 block[0] + Math.floor(gridSize[0] / 2) - 1, 
@@ -243,29 +227,26 @@ export const useGameStore = create<GameState>((set, get) => ({
                 block[2] + Math.floor(gridSize[2] / 2) - 1 
             ] as Vector3);
 
-        // CASE 1: Hold is empty
         if (!holdPiece) {
             set({
-                holdPiece: currentPieceType, // Stash current
-                currentPiece: null,          // Clear board momentarily
-                isHoldUsed: true             // Mark used
+                holdPiece: currentPieceType,
+                currentPiece: null,
+                isHoldUsed: true
             });
-            // Spawn the next piece from the queue (standard flow)
             createNewPiece(); 
         } 
-        // CASE 2: Swap with existing hold piece
         else {
             const pieceToSpawn = holdPiece;
             const newCurrentPiece = spawnPiece(pieceToSpawn.shape);
 
             set({
-                holdPiece: currentPieceType,      // Stash current
-                currentPiece: newCurrentPiece,    // Spawn the held piece
-                currentPieceType: pieceToSpawn,   // Update type tracker
+                holdPiece: currentPieceType,
+                currentPiece: newCurrentPiece,
+                currentPieceType: pieceToSpawn,
                 currentPieceTier: pieceToSpawn.tier,
                 currentPieceTranslations: 0,
                 currentPieceRotations: 0,
-                isHoldUsed: true                  // Mark used
+                isHoldUsed: true
             });
         }
     },
@@ -279,13 +260,11 @@ export const useGameStore = create<GameState>((set, get) => ({
           initialDropInterval
         } = get();
 
-        // 1. Get all turn results from the pure engine function
         const turnResult = engine.processTurn(
             landedPiece, grid, gridSize, level, isB2BActive, difficultClearHistory,
             currentPieceTier, currentPieceRotations, currentPieceTranslations, dropInfo
         );
 
-        // 2. Calculate level progression
         let newXP = currentXP + turnResult.xpGained;
         let newLevel = level;
         let requiredXP = engine.getRequiredXP(newLevel);
@@ -295,7 +274,6 @@ export const useGameStore = create<GameState>((set, get) => ({
             requiredXP = engine.getRequiredXP(newLevel);
         }
         
-        // 3. Update dynamic difficulty (drop speed, available shapes)
         const newDropInterval = Math.max(MIN_DROP_INTERVAL, initialDropInterval - (newLevel - 1) * 50);
         let newShapes = [...SHAPES_TIER_1];
         if (settings) {
@@ -305,7 +283,18 @@ export const useGameStore = create<GameState>((set, get) => ({
             if (newLevel >= TIER_3_UNLOCK_LEVEL) newShapes.push(...SHAPES_TIER_3);
         }
 
-        // 4. Set the new state based on the turn result
+        const linesClearedCount = turnResult.fullLayersY.length;
+        
+        let shakePower = 0;
+        if (dropInfo.isHardDrop) shakePower = 0.5;
+        if (linesClearedCount > 0) shakePower += linesClearedCount * 0.5;
+        if (linesClearedCount >= 4) shakePower = 4.0;
+
+        const isUltimate = linesClearedCount >= 4;
+        const isBigClear = linesClearedCount >= 2;
+        
+        const explosionMultiplier = isUltimate ? 3.5 : (isBigClear ? 2.0 : 1.0); 
+
         set({
             score: score + turnResult.pointsGained,
             cubesPlayed: get().cubesPlayed + landedPiece.length,
@@ -315,50 +304,63 @@ export const useGameStore = create<GameState>((set, get) => ({
             currentXP: newXP,
             dropInterval: newDropInterval,
             availableShapes: newShapes,
-            grid: turnResult.tempGrid, // Set grid with landed piece immediately
+            grid: turnResult.tempGrid,
         });
 
-        // 5. Handle the visual updates (animation or immediate new piece)
+        if (shakePower > 0) {
+            set({ 
+                triggerShake: Date.now(),
+                shakeIntensity: shakePower 
+            });
+        }
+
         if (turnResult.blocksToClear.length > 0) {
-            // highlight-start
-            const explosionSpeed = 80;
+            const baseExplosionSpeed = 80;
             const innerBlocks: Shape = [];
             const explodingBlocksData: ExplodingBlock[] = [];
 
-            // Partition blocks into inner (shrinking) and edge (exploding)
             turnResult.blocksToClear.forEach(block => {
                 const [x, y, z] = block;
                 if (x === 0 || x === gridSize[0] - 1 || z === 0 || z === gridSize[2] - 1) {
                     const centerOfLayerX = (gridSize[0] - 1) / 2;
                     const centerOfLayerZ = (gridSize[2] - 1) / 2;
                     const direction = new THREE.Vector3(x - centerOfLayerX, 0, z - centerOfLayerZ).normalize();
+                    
+                    const yVelocity = isUltimate ? (Math.random() * 200 + 50) : ((Math.random() - 0.5) * 40);
+                    
                     explodingBlocksData.push({
                         position: block,
-                        velocity: [direction.x * explosionSpeed, (Math.random() - 0.5) * 20, direction.z * explosionSpeed],
-                        color: PALETTE[y % PALETTE.length]
+                        velocity: [
+                            direction.x * baseExplosionSpeed * explosionMultiplier, 
+                            yVelocity, 
+                            direction.z * baseExplosionSpeed * explosionMultiplier
+                        ],
+                        color: isUltimate 
+                            ? (Math.random() > 0.5 ? TETRIS_COLOR : ULTIMATE_COLOR) 
+                            : PALETTE[y % PALETTE.length]
                     });
                 } else {
                     innerBlocks.push(block);
                 }
             });
 
-            // Set state to trigger animations
             set({
                 clearingBlocks: innerBlocks,
                 explodingBlocks: explodingBlocksData,
             });
-            // highlight-end
+
+            const delay = isUltimate ? 500 : ANIMATION_DURATION;
 
             setTimeout(() => {
                 const finalGrid = engine.dropClearedLines(get().grid, turnResult.fullLayersY);
                 set({ 
                     grid: finalGrid, 
                     clearingBlocks: [], 
-                    explodingBlocks: [] // Clear animation states
+                    explodingBlocks: []
                 });
                 createNewPiece();
                 set({ isAnimating: false });
-            }, ANIMATION_DURATION);
+            }, delay);
         } else {
             createNewPiece();
             set({ isAnimating: false });
@@ -407,9 +409,6 @@ export const useGameStore = create<GameState>((set, get) => ({
         const { currentPiece, isAnimating, grid, gridSize, processLandedPiece } = get();
         if (!currentPiece || isAnimating) return;
 
-        // NEW: Trigger the shake by setting the current timestamp
-        set({ triggerShake: Date.now() });
-
         let dropDistance = 0;
         let landedPiece = currentPiece;
         for (let y = 1; y < gridSize[1]; y++) {
@@ -455,7 +454,6 @@ export const useGameStore = create<GameState>((set, get) => ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ playerName, score })
             });
-            // After submitting, refresh the highscores
             get().fetchHighscores();
         } catch (error) {
             console.error("Failed to submit highscore:", error);

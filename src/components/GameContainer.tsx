@@ -11,6 +11,36 @@ import { useInterval } from '../hooks/useInterval';
 import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
 
+// NEW COMPONENT: Flash Overlay
+const ScreenFlash = () => {
+  const { triggerShake, shakeIntensity } = useGameStore(state => ({
+      triggerShake: state.triggerShake,
+      shakeIntensity: state.shakeIntensity
+  }));
+  const [flash, setFlash] = useState(false);
+
+  useEffect(() => {
+      // Only flash on big clears (intensity >= 2) or hard drops
+      if (triggerShake > 0 && shakeIntensity >= 1.5) {
+          setFlash(true);
+          const timer = setTimeout(() => setFlash(false), 80); // Quick flash
+          return () => clearTimeout(timer);
+      }
+  }, [triggerShake, shakeIntensity]);
+
+  return (
+      <div style={{
+          position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'white',
+          opacity: flash ? (shakeIntensity >= 3 ? 0.6 : 0.2) : 0,
+          pointerEvents: 'none',
+          zIndex: 9999,
+          transition: 'opacity 0.05s ease-out',
+          mixBlendMode: 'overlay' // Makes colors pop underneath
+      }} />
+  );
+}
+
 const GameContainer = () => {
   // --- SELECTORS ---
   const {
@@ -132,6 +162,7 @@ const GameContainer = () => {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <ScreenFlash /> 
       <StatsDisplay score={score} speedLevel={level} time={timePassed} cubesPlayed={cubesPlayed} />
       <ControlsHint />
       <NextPiecePreview nextPiece={nextPiece ? nextPiece.shape : null} />
