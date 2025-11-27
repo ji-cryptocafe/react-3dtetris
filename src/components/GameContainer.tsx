@@ -10,7 +10,7 @@ import HeldPieceDisplay from './HeldPieceDisplay';
 import { useInterval } from '../hooks/useInterval';
 import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
-import { useTetrisControls } from '../hooks/useTetrisControls'; // Import Hook
+import { useTetrisControls } from '../hooks/useTetrisControls'; 
 
 
 const ScreenFlash = () => {
@@ -48,7 +48,8 @@ const GameContainer = () => {
     gameState, gridSize, grid, currentPiece, clearingBlocks, explodingBlocks,
     score, level, timePassed, cubesPlayed, nextPiece,
     settings, isAnimating,
-    holdPiece 
+    holdPiece,
+    backgroundMode 
   } = useGameStore(state => ({
     gameState: state.gameState,
     gridSize: state.gridSize,
@@ -63,11 +64,18 @@ const GameContainer = () => {
     nextPiece: state.nextPiece,
     settings: state.settings,
     isAnimating: state.isAnimating,
-    holdPiece: state.holdPiece
+    holdPiece: state.holdPiece,
+    backgroundMode: state.backgroundMode
   }));
   
   // --- ACTIONS ---
-  const { resetGame, movePiece, rotatePiece, hardDrop, tick, updateTime, submitHighscore, triggerHold } = useGameStore.getState();  // --- LOCAL STATE for UI ---
+  const { 
+      resetGame, movePiece, rotatePiece, hardDrop, 
+      tick, updateTime, submitHighscore, triggerHold,
+      toggleBackgroundMode 
+  } = useGameStore.getState();  
+  
+  // --- LOCAL STATE for UI ---
   const [playerName, setPlayerName] = useState('');
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [showSubmittedMessage, setShowSubmittedMessage] = useState(false);
@@ -144,11 +152,42 @@ const GameContainer = () => {
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <ScreenFlash /> 
+      
+      {/* HUD Elements */}
       <StatsDisplay score={score} speedLevel={level} time={timePassed} cubesPlayed={cubesPlayed} />
+      
+      {/* Background Toggle Button */}
+      <button 
+        onClick={toggleBackgroundMode}
+        style={{
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            zIndex: 100,
+            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            color: '#ccc',
+            border: '1px solid #444',
+            borderRadius: '10px',
+            padding: '8px 12px',
+            cursor: 'pointer',
+            fontSize: '0.8em',
+            fontFamily: 'monospace',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+            transition: 'background-color 0.2s'
+        }}
+        onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(50, 50, 50, 0.6)'}
+        onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.4)'}
+        title="Switch Environment"
+      >
+        ENV: {backgroundMode}
+      </button>
+
       <ControlsHint />
       <NextPiecePreview nextPiece={nextPiece ? nextPiece.shape : null} />
       <HeldPieceDisplay heldPiece={holdPiece ? holdPiece.shape : null} /> 
       <LevelIndicator gridSize={gridSize} levelStatus={levelStatus} />
+      
       {isGameOver ? (
         <div style={{
             position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
@@ -184,7 +223,7 @@ const GameContainer = () => {
 
           <HighscoreDisplay />
 
-          {/* New, locally styled restart button */}
+          {/* Restart Button inside Game Over Modal */}
           <button onClick={resetGame} style={{
               marginTop: '30px', padding: '15px 40px', fontSize: '1.2em',
               fontWeight: 'bold', cursor: 'pointer', border: 'none',
@@ -198,6 +237,8 @@ const GameContainer = () => {
         // During active gameplay, the restart button is in the corner
         <RestartButton onRestart={resetGame} />
       )}
+      
+      {/* 3D Game Canvas */}
       <div style={{ width: gameAreaSize.width, height: gameAreaSize.height }}>
         <GameBoard
           gridSize={gridSize}

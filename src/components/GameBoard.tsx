@@ -8,8 +8,12 @@ import ProjectionHighlights from './ProjectionHighlights';
 import FallingPiece from './FallingPiece';
 import GhostPiece from './GhostPiece';
 import Effects from './Effects';
-import { type Shape, type Grid, CELL_SIZE, PALETTE, type ExplodingBlock as ExplodingBlockData, useGameStore, type Vector3 } from '../store/gameStore';
+import { type Shape, type Grid, CELL_SIZE, PALETTE, type ExplodingBlock as ExplodingBlockData, type Vector3 } from '../store/gameStore';
 import { getHardDropDistance } from '../game/engine';
+import StaticBlocks from './StaticBlocks';
+import ExplosionParticles from './ExplosionParticles';
+import { useGameStore } from '../store/gameStore';
+import { SpaceBackground, NeonFloorBackground, CityBackground } from './Backgrounds';
 
 const AnimatedInstance = animated(Instance);
 
@@ -42,54 +46,6 @@ interface ExplodingBlockProps {
     velocity: THREE.Vector3;
     color: string;
 }
-  
-// --- IMPROVED EXPLODING BLOCK ---
-const ExplodingBlock = ({ initialPosition, velocity, color }: ExplodingBlockProps) => {
-  // Random rotation speed
-  const rotationSpeed = useRef([
-      (Math.random() - 0.5) * 0.5, 
-      (Math.random() - 0.5) * 0.5, 
-      (Math.random() - 0.5) * 0.5
-  ]);
-  const meshRef = useRef<THREE.Mesh>(null!);
-
-  const { pos, scale, opacity } = useSpring({
-    from: {
-      pos: initialPosition.toArray(),
-      scale: [1, 1, 1],
-      opacity: 1,
-    },
-    to: {
-      pos: initialPosition.clone().add(velocity).toArray(),
-      scale: [0.1, 0.1, 0.1],
-      opacity: 0,
-    },
-    config: { mass: 1.0, tension: 120, friction: 30 }, // Lower friction for flying further
-  });
-
-  // Rotate frame by frame
-  useFrame(() => {
-      if(meshRef.current) {
-          meshRef.current.rotation.x += rotationSpeed.current[0];
-          meshRef.current.rotation.y += rotationSpeed.current[1];
-          meshRef.current.rotation.z += rotationSpeed.current[2];
-      }
-  });
-
-  return (
-    <animated.mesh ref={meshRef} position={pos as any} scale={scale as any}>
-      <boxGeometry args={[CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.9]} />
-      <animated.meshStandardMaterial 
-          color={color} 
-          opacity={opacity} 
-          transparent 
-          toneMapped={false} 
-          emissive={color}
-          emissiveIntensity={4} // Make them glow brighter
-      />
-    </animated.mesh>
-  );
-};
 
 const ImpactShake = () => {
   const { triggerShake, shakeIntensity } = useGameStore(state => ({
@@ -131,6 +87,19 @@ interface GameBoardProps {
   explodingBlocks: ExplodingBlockData[];
   cameraSettings: { position: [number, number, number]; fov: number };
 }
+
+// --- Helper Component to switch modes inside Canvas ---
+const BackgroundManager = ({ gridSize }: { gridSize: [number, number, number] }) => {
+  const backgroundMode = useGameStore(state => state.backgroundMode);
+
+  switch (backgroundMode) {
+    case 'space': return <SpaceBackground />;
+    case 'city': return <CityBackground />;
+    case 'neon': 
+    default: 
+        return <NeonFloorBackground gridSize={gridSize} />;
+  }
+};
 
 const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodingBlocks, cameraSettings }: GameBoardProps) => {
   const getWorldPosition = useCallback((x: number, y: number, z: number): THREE.Vector3 => {
@@ -174,11 +143,14 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <Canvas camera={cameraSettings} dpr={[1, 2]} shadows> 
+        {/* 
         <color attach="background" args={['#050505']} />
         
-        {/* HDR Environment for realistic reflections */}
+        HDR Environment for realistic reflections
         <Environment preset="city" />
-        
+         */}
+        <BackgroundManager gridSize={gridSize} />
+
         <Effects />
         
         {/* ENHANCED LIGHTING FOR DRAMATIC EFFECT */}
@@ -227,44 +199,25 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
         <group rotation={[-Math.PI / 2, 0, 0]}>
           <GridDisplay gridSize={gridSize} />
           <ProjectionHighlights gridSize={gridSize} currentPiece={currentPiece} />
+          
           <FallingPiece gridSize={gridSize} piece={currentPiece} />
           <GhostPiece gridSize={gridSize} piece={ghostPiece} />
-          <Instances range={MAX_INSTANCES}>
-            <boxGeometry args={[CELL_SIZE * 0.98, CELL_SIZE * 0.98, CELL_SIZE * 0.98]} />
-            <meshStandardMaterial 
-                roughness={0.09}
-                metalness={0.11}
-                envMapIntensity={1.5}
-                emissive="#ffffff"
-                emissiveIntensity={0.02}
-            />
+          
+          {/* REFACTORED: Replaced inline Instances with the component */}
+          <StaticBlocks 
+            grid={gridState} 
+            gridSize={gridSize} 
+            clearingCoords={clearingCoords} 
+          />
 
-            {gridState.map((row: (number | string)[][], x: number) =>
-              row.map((col: (number | string)[], y: number) =>
-                col.map((cellValue: number | string, z: number) => {
-                  if (cellValue !== 0) {
-                    const pos = getWorldPosition(x, y, z);
-                    const color = PALETTE[y % PALETTE.length];
-                    const coordKey = `${x},${y},${z}`;
-                    const isClearing = clearingCoords.has(coordKey);
-                    
-                    return <Block key={coordKey} position={pos} color={color} isClearing={isClearing} />;
-                  }
-                  return null;
-                })
-              )
-            )}
-          </Instances>
-
-          {explodingBlocks.map((block, index) => {
-              const pos = getWorldPosition(block.position[0], block.position[1], block.position[2]);
-              const vel = new THREE.Vector3(...block.velocity);
-              return <ExplodingBlock key={`exploding-${index}`} initialPosition={pos} velocity={vel} color={block.color}/>
-          })}
+          <ExplosionParticles 
+            explodingBlocks={explodingBlocks} 
+            gridSize={gridSize} 
+          />
+ 
         </group>
       </Canvas>
     </div>
   );
-};
-
+}
 export default GameBoard;

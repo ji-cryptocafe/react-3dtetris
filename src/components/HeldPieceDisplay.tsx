@@ -1,12 +1,14 @@
+// --- START OF FILE react-3dtetris (7)/src/components/HeldPieceDisplay.tsx ---
+
 import { useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { type Shape } from '../store/gameStore';
-import { DIRS, edgeKey } from '../utils/edgeHash';
 import { OrbitControls } from '@react-three/drei';
+import { usePieceGeometry, useGeometricCenter } from '../hooks/usePieceGeometry';
 
 const HELD_PIECE_COLOR = '#ffa500';
-const HELD_CELL_SIZE = 20;
+const HELD_CELL_SIZE = 20; // Specific to this UI
 const HELD_LINE_RADIUS = 0.6;
 
 const HeldTube = ({ start, end }: { start: THREE.Vector3, end: THREE.Vector3 }) => {
@@ -19,66 +21,14 @@ const HeldTube = ({ start, end }: { start: THREE.Vector3, end: THREE.Vector3 }) 
   );
 };
 
-function useHeldEdgeCounts(cubes: Shape | null) {
-  return useMemo(() => {
-    if (!cubes) return new Map<string, number>();
-    const counts = new Map<string, number>();
-    cubes.forEach(cube => {
-      const [x, y, z] = cube;
-      [[y, z], [y + 1, z], [y, z + 1], [y + 1, z + 1]].forEach(([yy, zz]) => {
-        const k = edgeKey(x, yy, zz, 0);
-        counts.set(k, (counts.get(k) || 0) + 1);
-      });
-      [[x, z], [x + 1, z], [x, z + 1], [x + 1, z + 1]].forEach(([xx, zz]) => {
-        const k = edgeKey(xx, y, zz, 1);
-        counts.set(k, (counts.get(k) || 0) + 1);
-      });
-      [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]].forEach(([xx, yy]) => {
-        const k = edgeKey(xx, yy, z, 2);
-        counts.set(k, (counts.get(k) || 0) + 1);
-      });
-    });
-    return counts;
-  }, [cubes]);
-}
-
-function useHeldOuterEdges(edgeCounts: Map<string, number>) {
-  return useMemo(() => {
-    const edges: { start: THREE.Vector3, end: THREE.Vector3 }[] = [];
-    edgeCounts.forEach((count, key) => {
-      if (count % 2 === 1) {
-        const [x, y, z, dir] = key.split(',').map(Number);
-        const [dx, dy, dz] = DIRS[dir];
-        const start = new THREE.Vector3(x * HELD_CELL_SIZE, y * HELD_CELL_SIZE, z * HELD_CELL_SIZE);
-        const end = new THREE.Vector3((x + dx) * HELD_CELL_SIZE, (y + dy) * HELD_CELL_SIZE, (z + dz) * HELD_CELL_SIZE);
-        edges.push({ start, end });
-      }
-    });
-    return edges;
-  }, [edgeCounts]);
-}
-
-const useCenterPoint = (edges: { start: THREE.Vector3, end: THREE.Vector3 }[]) => {
-    return useMemo(() => {
-        if (edges.length === 0) return new THREE.Vector3(0,0,0);
-        
-        const box = new THREE.Box3();
-        edges.forEach(({start, end}) => {
-            box.expandByPoint(start);
-            box.expandByPoint(end);
-        });
-
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        return center;
-    }, [edges]);
-};
-
 const RotatingHeldPiece = ({ piece }: { piece: Shape | null }) => {
   const groupRef = useRef<THREE.Group>(null!);
-  const edgeCounts = useHeldEdgeCounts(piece);
-  const outerEdges = useHeldOuterEdges(edgeCounts);
-  const centerPoint = useCenterPoint(outerEdges);
+  
+  // 1. Get raw geometry in local space (no grid offset)
+  const outerEdges = usePieceGeometry(piece, HELD_CELL_SIZE, null);
+  
+  // 2. Calculate center point for rotation
+  const centerPoint = useGeometricCenter(outerEdges);
   
   useFrame(() => {
     if (groupRef.current) {
@@ -92,6 +42,7 @@ const RotatingHeldPiece = ({ piece }: { piece: Shape | null }) => {
   return (
     <group ref={groupRef}>
       {outerEdges.map((edge, i) => {
+        // 3. Center the piece by subtracting the geometric center
         const start = edge.start.clone().sub(centerPoint);
         const end = edge.end.clone().sub(centerPoint);
         return <HeldTube key={i} start={start} end={end} />;
@@ -121,12 +72,8 @@ const HeldPieceDisplay = ({ heldPiece }: { heldPiece: Shape | null }) => {
           </Canvas>
         ) : (
           <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            height: '100%',
-            color: '#666',
-            fontSize: '0.9em'
+            display: 'flex', alignItems: 'center', justifyContent: 'center', 
+            height: '100%', color: '#666', fontSize: '0.9em' 
           }}>
             Empty
           </div>

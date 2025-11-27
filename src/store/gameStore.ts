@@ -11,6 +11,7 @@ type ShapeDefinition = Vector3[];
 export type PieceObject = { shape: Shape; tier: number };
 
 export type Highscore = { player_name: string; score: number };
+export type BackgroundMode = 'space' | 'neon' | 'city';
 
 export const PALETTE = [ '#DC322F', '#859900', '#268BD2', '#D33682', '#2AA198', '#CB4B16', '#6C71C4', '#B58900' ];
 
@@ -73,6 +74,9 @@ type GameState = {
   triggerShake: number; 
   shakeIntensity: number;
 
+  backgroundMode: BackgroundMode;
+  toggleBackgroundMode: () => void;
+
   initGame: (settings: GameSettings) => void;
   resetGame: () => void;
   createNewPiece: () => void;
@@ -124,6 +128,15 @@ export const useGameStore = create<GameState>((set, get) => ({
     holdPiece: null,
     isHoldUsed: false,
 
+    backgroundMode: 'neon',
+
+    toggleBackgroundMode: () => {
+        const modes: BackgroundMode[] = ['space', 'neon', 'city'];
+        const currentIdx = modes.indexOf(get().backgroundMode);
+        const nextIdx = (currentIdx + 1) % modes.length;
+        set({ backgroundMode: modes[nextIdx] });
+    },
+    
     initGame: (settings) => {
         set({ settings, gameState: 'playing' });
         get().resetGame();
