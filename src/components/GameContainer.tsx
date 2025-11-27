@@ -12,7 +12,6 @@ import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
 import { useTetrisControls } from '../hooks/useTetrisControls'; 
 
-
 const ScreenFlash = () => {
   const { triggerShake, shakeIntensity } = useGameStore(state => ({
       triggerShake: state.triggerShake,
@@ -37,7 +36,7 @@ const ScreenFlash = () => {
           pointerEvents: 'none',
           zIndex: 9999,
           transition: 'opacity 0.05s ease-out',
-          mixBlendMode: 'overlay' // Makes colors pop underneath
+          mixBlendMode: 'overlay' 
       }} />
   );
 }
@@ -49,7 +48,8 @@ const GameContainer = () => {
     score, level, timePassed, cubesPlayed, nextPiece,
     settings, isAnimating,
     holdPiece,
-    backgroundMode 
+    backgroundMode,
+    initialDropInterval // Required to calculate speed restoration
   } = useGameStore(state => ({
     gameState: state.gameState,
     gridSize: state.gridSize,
@@ -65,7 +65,8 @@ const GameContainer = () => {
     settings: state.settings,
     isAnimating: state.isAnimating,
     holdPiece: state.holdPiece,
-    backgroundMode: state.backgroundMode
+    backgroundMode: state.backgroundMode,
+    initialDropInterval: state.initialDropInterval
   }));
   
   // --- ACTIONS ---
@@ -84,13 +85,29 @@ const GameContainer = () => {
   const isGameOver = gameState === 'gameOver';
   const isPlaying = gameState === 'playing' && !isGameOver && !isAnimating;
 
+  // --- SOFT DROP LOGIC ---
+  // We define these here to interact with the store's dropInterval
+  const startSoftDrop = () => {
+    // 50ms is a good "fast" speed. 
+    useGameStore.setState({ dropInterval: 50 });
+  };
+
+  const stopSoftDrop = () => {
+    // We must recalculate the speed for the current level to restore it correctly.
+    // This logic mimics the formula in gameStore.ts processLandedPiece
+    const currentSpeed = Math.max(100, initialDropInterval - (level - 1) * 50);
+    useGameStore.setState({ dropInterval: currentSpeed });
+  };
+
   // --- PRO CONTROLS HOOK ---
   useTetrisControls({
     movePiece,
     rotatePiece,
     hardDrop,
     triggerHold,
-    isPlaying // Pass the calculated playing state
+    startSoftDrop,
+    stopSoftDrop,
+    isPlaying
   });
 
   // Reset UI state when a new game starts

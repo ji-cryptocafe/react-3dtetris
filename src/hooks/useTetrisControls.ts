@@ -11,6 +11,8 @@ type Controls = {
   hardDrop: () => void;
   triggerHold: () => void;
   isPlaying: boolean;
+  startSoftDrop: () => void;
+  stopSoftDrop: () => void;
 };
 
 export function useTetrisControls({ 
@@ -18,6 +20,8 @@ export function useTetrisControls({
   rotatePiece, 
   hardDrop, 
   triggerHold,
+  startSoftDrop,
+  stopSoftDrop,
   isPlaying 
 }: Controls) {
   
@@ -64,9 +68,15 @@ export function useTetrisControls({
         startRepeat(() => movePiece([1, 0, 0]), ARR_SPEED);
       }
       
-      // SOFT DROP (DOWN) - Often has shorter/no DAS, but consistent feel is good
+      // REMOVE the Soft Drop from 'S' key
+      // S is purely Backwards (Z-axis) now
       else if (key === 's' || key === 'arrowdown') {
-        startRepeat(() => movePiece([0, 0, -1]), SOFT_DROP_SPEED);
+        startRepeat(() => movePiece([0, 0, -1]), ARR_SPEED);
+     }
+
+      // ADD Shift for Soft Drop
+        else if (key === 'shift') {
+        startSoftDrop();
       }
 
       // UP (Move backwards in Z depth) - 3D specific
@@ -96,14 +106,14 @@ export function useTetrisControls({
       }
       
       // HOLD
-      else if (key === 'c' || key === 'shift') {
+      else if (key === 'c') {
         triggerHold();
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const code = e.code;
-
+      const key = e.key.toLowerCase();
       // Clear any pending DAS timers or ARR intervals for this specific key
       if (timers.current[code]) {
         clearTimeout(timers.current[code]!);
@@ -112,6 +122,10 @@ export function useTetrisControls({
       if (intervals.current[code]) {
         clearInterval(intervals.current[code]!);
         intervals.current[code] = null;
+      }
+      // ADD Stop Soft Drop
+      if (key === 'shift') {
+        stopSoftDrop();
       }
     };
 

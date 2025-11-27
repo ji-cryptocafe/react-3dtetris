@@ -91,6 +91,9 @@ type GameState = {
   updateTime: () => void;
   fetchHighscores: () => Promise<void>;
   submitHighscore: (playerName: string) => Promise<void>;
+
+  startSoftDrop: () => void;
+stopSoftDrop: () => void;
 };
 
 const createEmptyGrid = (gridSize: [number, number, number]): Grid => Array.from({ length: gridSize[0] }, () => Array.from({ length: gridSize[1] }, () => Array(gridSize[2]).fill(0)));
@@ -129,6 +132,9 @@ export const useGameStore = create<GameState>((set, get) => ({
     isHoldUsed: false,
 
     backgroundMode: 'neon',
+
+    startSoftDrop: () => set({ dropInterval: 50 }), // 50ms is a good soft drop speed
+    stopSoftDrop: () => set((state) => ({ dropInterval: state.initialDropInterval })),
 
     toggleBackgroundMode: () => {
         const modes: BackgroundMode[] = ['space', 'neon', 'city'];
