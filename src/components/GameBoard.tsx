@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Instances, Instance, CameraShake, Environment } from '@react-three/drei';
+import { OrbitControls, Instances, Instance, Environment } from '@react-three/drei'; // Removed CameraShake
 import * as THREE from 'three';
 import { useSpring, animated } from '@react-spring/three';
 import { GridDisplay } from './GridDisplay';
@@ -41,43 +41,60 @@ const Block = ({ position, color, isClearing }: BlockProps) => {
   );
 };
 
-interface ExplodingBlockProps {
-    initialPosition: THREE.Vector3;
-    velocity: THREE.Vector3;
-    color: string;
-}
-
-const ImpactShake = () => {
+// --- NEW COMPONENT: Shakes only its children, not the camera ---
+const BoardShaker = ({ children }: { children: React.ReactNode }) => {
+  const groupRef = useRef<THREE.Group>(null!);
   const { triggerShake, shakeIntensity } = useGameStore(state => ({
-      triggerShake: state.triggerShake,
-      shakeIntensity: state.shakeIntensity
+    triggerShake: state.triggerShake,
+    shakeIntensity: state.shakeIntensity
   }));
-  const [isShaking, setIsShaking] = useState(false);
 
+  // Refs to handle animation state without re-rendering
+  const shakeActive = useRef(false);
+  const shakeEnd = useRef(0);
+
+  // Sync store state to refs
   useEffect(() => {
-      if (triggerShake > 0) {
-          setIsShaking(true);
-          const timer = setTimeout(() => setIsShaking(false), 350); // Longer shake
-          return () => clearTimeout(timer);
-      }
+    if (triggerShake > 0) {
+      shakeActive.current = true;
+      shakeEnd.current = Date.now() + 350; // 350ms duration
+    }
   }, [triggerShake]);
 
-  if (!isShaking) return null;
+  useFrame(() => {
+    if (!groupRef.current) return;
 
-  return (
-      <CameraShake 
-          maxYaw={0.01 * shakeIntensity}
-          maxPitch={0.01 * shakeIntensity}
-          maxRoll={0.01 * shakeIntensity} 
-          yawFrequency={15}
-          pitchFrequency={15} 
-          rollFrequency={15}
-          intensity={1}
-          decay={true}
-          decayRate={0.8}
-      />
-  );
-}
+    if (shakeActive.current) {
+      const now = Date.now();
+      const timeLeft = shakeEnd.current - now;
+
+      if (timeLeft > 0) {
+        // Calculate decay (1.0 down to 0.0)
+        const decay = timeLeft / 350;
+        // Ease out slightly
+        const power = shakeIntensity * (decay * decay) * 5; 
+
+        // Apply random jitter
+        groupRef.current.position.set(
+          (Math.random() - 0.5) * power,
+          (Math.random() - 0.5) * power,
+          (Math.random() - 0.5) * power
+        );
+      } else {
+        shakeActive.current = false;
+        // Reset position when done
+        groupRef.current.position.set(0, 0, 0);
+      }
+    } else {
+        // Ensure it stays at zero if logic drifts
+        if (groupRef.current.position.lengthSq() > 0.001) {
+            groupRef.current.position.lerp(new THREE.Vector3(0,0,0), 0.1);
+        }
+    }
+  });
+
+  return <group ref={groupRef}>{children}</group>;
+};
 
 interface GameBoardProps {
   gridSize: [number, number, number];
@@ -97,7 +114,7 @@ const BackgroundManager = ({ gridSize }: { gridSize: [number, number, number] })
     case 'city': return <CityBackground />;
     case 'neon': 
     default: 
-        return <NeonFloorBackground gridSize={gridSize} />;
+        return <SpaceBackground />;
   }
 };
 
@@ -115,15 +132,10 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
   const ghostPiece = useMemo(() => {
     if (!currentPiece) return null;
     
-    // Calculate how far it can drop
     const dropDistance = getHardDropDistance(currentPiece, gridState, gridSize);
     
-    // If it can't drop at all (already on ground), don't show ghost or show at current pos? 
-    // Usually show at current pos if distance is 0, but to avoid visual Z-fighting with 
-    // the real piece, we might want to hide it if distance is 0, or just let depthWrite handles it.
     if (dropDistance === 0) return null;
 
-    // Apply distance to create the ghost shape
     return currentPiece.map(block => [
         block[0], 
         block[1] + dropDistance, 
@@ -138,25 +150,15 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
     return coords;
   }, [clearingBlocks]);
 
-  const MAX_INSTANCES = 4000;
-
   return (
     <div style={{ width: '100%', height: '100%' }}>
       <Canvas camera={cameraSettings} dpr={[1, 2]} shadows> 
-        {/* 
-        <color attach="background" args={['#050505']} />
-        
-        HDR Environment for realistic reflections
-        <Environment preset="city" />
-         */}
+        {/* Render Background OUTSIDE the Shaker */}
         <BackgroundManager gridSize={gridSize} />
 
         <Effects />
         
-        {/* ENHANCED LIGHTING FOR DRAMATIC EFFECT */}
         <ambientLight intensity={0.2} /> 
-        
-        {/* Key light - main illumination from above */}
         <directionalLight 
           position={[50, 100, 50]} 
           intensity={1.1} 
@@ -164,57 +166,35 @@ const GameBoard = ({ gridSize, gridState, currentPiece, clearingBlocks, explodin
           shadow-mapSize-width={2048}
           shadow-mapSize-height={2048}
         />
-        
-        {/* Fill light - softer light from the side */}
-        <directionalLight 
-          position={[-50, 50, -50]} 
-          intensity={0.6} 
-          color="#4488ff"
-        />
-        
-        {/* Rim light - creates edge highlights */}
-        <directionalLight 
-          position={[0, -50, 100]} 
-          intensity={1.8} 
-          color="#ff6644"
-        />
-        
-        {/* Hemisphere light for ambient fill */}
-        <hemisphereLight 
-          intensity={0.5} 
-          groundColor="#1a1a2e" 
-          color="#ffffff"
-        />
-        
-        {/* Subtle point lights for depth */}
+        <directionalLight position={[-50, 50, -50]} intensity={0.6} color="#4488ff" />
+        <directionalLight position={[0, -50, 100]} intensity={1.8} color="#ff6644" />
+        <hemisphereLight intensity={0.5} groundColor="#1a1a2e" color="#ffffff" />
         <pointLight position={[100, 100, 100]} intensity={0.4} distance={400} decay={2} color="#00ff88" />
         <pointLight position={[-100, 100, -100]} intensity={0.4} distance={400} decay={2} color="#ff0088" />
-         
 
         <OrbitControls enableRotate={false} enablePan={false} enableZoom={false} minDistance={200} maxDistance={1000} />
         
-        {/* SHAKE EFFECT */}
-        <ImpactShake />
-
+        {/* The Game World Group */}
         <group rotation={[-Math.PI / 2, 0, 0]}>
-          <GridDisplay gridSize={gridSize} />
-          <ProjectionHighlights gridSize={gridSize} currentPiece={currentPiece} />
-          
-          <FallingPiece gridSize={gridSize} piece={currentPiece} />
-          <GhostPiece gridSize={gridSize} piece={ghostPiece} />
-          
-          {/* REFACTORED: Replaced inline Instances with the component */}
-          <StaticBlocks 
-            grid={gridState} 
-            gridSize={gridSize} 
-            clearingCoords={clearingCoords} 
-          />
+          {/* Wrap specific game elements in the Shaker */}
+          <BoardShaker>
+            <GridDisplay gridSize={gridSize} />
+            <ProjectionHighlights gridSize={gridSize} currentPiece={currentPiece} />
+            
+            <FallingPiece gridSize={gridSize} piece={currentPiece} />
+            <GhostPiece gridSize={gridSize} piece={ghostPiece} />
+            
+            <StaticBlocks 
+              grid={gridState} 
+              gridSize={gridSize} 
+              clearingCoords={clearingCoords} 
+            />
 
-          <ExplosionParticles 
-            explodingBlocks={explodingBlocks} 
-            gridSize={gridSize} 
-          />
- 
+            <ExplosionParticles 
+              explodingBlocks={explodingBlocks} 
+              gridSize={gridSize} 
+            />
+          </BoardShaker>
         </group>
       </Canvas>
     </div>
