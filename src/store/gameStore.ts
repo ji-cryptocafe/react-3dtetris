@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import * as THREE from 'three';
-import { type GameSettings } from '../components/MainMenu';
+import { type GameSettings } from '../types'; 
 import * as engine from '../game/engine'; 
 
 export const CELL_SIZE = 30;
@@ -23,6 +23,9 @@ export interface ExplodingBlock {
     velocity: Vector3;
     color: string;
 }
+export type TutorialPosition = 'center' | 'top-right' | 'top-left' | 'bottom-left';
+
+const TUTORIAL_DROP_SPEED = 8000; // 8 seconds per drop (approx 10% of normal speed)
 
 const SIZES: Record<GameSettings['size'], [number, number, number]> = { 'S': [8, 12, 8], 'M': [10, 15, 10], 'L': [13, 20, 13] };
 const SPEEDS: Record<GameSettings['difficulty'], number> = { 'Easy': 1200, 'Medium': 1000, 'Hard': 800 };
@@ -38,6 +41,96 @@ const SHAPES_TIER_3: ShapeDefinition[] = [ [[0,0,0], [1,0,0], [-1,0,0], [0,1,0],
 
 const ANIMATION_DURATION = 300;
 const MIN_DROP_INTERVAL = 100;
+
+export const TUTORIAL_STEPS = [
+    // --- WELCOME ---
+    { 
+      id: 0, 
+      text: "Welcome to **3D Tetris**! Let's take a quick tour of the interface.", 
+      action: 'next', // User clicks "Next"
+      position: 'center' as TutorialPosition
+    },
+  
+    // --- UI TOUR ---
+    { 
+      id: 1, 
+      text: "Here is the **Next Piece** preview. Keep an eye here to plan your strategy.", 
+      action: 'next', 
+      position: 'top-right' as TutorialPosition
+    },
+    { 
+      id: 2, 
+      text: "This is your **Hold** slot. You can stash a piece here to use later.", 
+      action: 'next', 
+      position: 'top-left' as TutorialPosition
+    },
+    { 
+      id: 3, 
+      text: "Forget the keys? A handy **Controls Reference** is always visible down here.", 
+      action: 'next', 
+      position: 'bottom-left' as TutorialPosition
+    },
+  
+    // --- MOVEMENT ---
+    { 
+      id: 4, 
+      text: "Let's move! Use **A** and **D** to move the block Left and Right.", 
+      action: 'move_x', 
+      position: 'center' as TutorialPosition
+    },
+    { 
+      id: 5, 
+      text: "Use **W** and **S** to move the block Forward and Backward (Depth).", 
+      action: 'move_z', 
+      position: 'center' as TutorialPosition
+    },
+  
+    // --- ROTATION ---
+    { 
+      id: 6, 
+      text: "Press **Q** to spin the block horizontally (Y-Axis).", 
+      action: 'rotate_y', 
+      position: 'center' as TutorialPosition
+    },
+    { 
+      id: 7, 
+      text: "Press **E** to flip the block forward (X-Axis).", 
+      action: 'rotate_x', 
+      position: 'center' as TutorialPosition
+    },
+    { 
+      id: 8, 
+      text: "Press **R** to roll the block sideways (Z-Axis).", 
+      action: 'rotate_z', 
+      position: 'center' as TutorialPosition
+    },
+  
+    // --- MECHANICS ---
+    { 
+      id: 9, 
+      text: "Hold **SHIFT** to Soft Drop (fall faster).", 
+      action: 'soft_drop', 
+      position: 'center' as TutorialPosition
+    },
+    { 
+      id: 10, 
+      text: "Press **SPACE** to Hard Drop (lock instantly).", 
+      action: 'hard_drop', 
+      position: 'center' as TutorialPosition
+    },
+    { 
+      id: 11, 
+      text: "Press **C** to Hold the current piece.", 
+      action: 'hold', 
+      position: 'top-left' as TutorialPosition // Point back to Hold slot
+    },
+    { 
+      id: 12, 
+      text: "You're ready! Clear lines and survive as long as you can.", 
+      action: 'end', 
+      position: 'center' as TutorialPosition
+    },
+  ];
 
 type GameState = {
   gameState: 'menu' | 'playing' | 'gameOver';
@@ -92,13 +185,25 @@ type GameState = {
   fetchHighscores: () => Promise<void>;
   submitHighscore: (playerName: string) => Promise<void>;
 
+  // NEW: Tutorial State
+  isTutorial: boolean;
+  tutorialStep: number;
+  tutorialTransitionTimeout: ReturnType<typeof setTimeout> | null;
+  // NEW Actions
+  startTutorial: () => void;
+  advanceTutorial: (triggerAction: string) => void;
+  skipTutorial: () => void;
   startSoftDrop: () => void;
-stopSoftDrop: () => void;
+  stopSoftDrop: () => void;
+  nextTutorialStep: () => void;  
 };
 
 const createEmptyGrid = (gridSize: [number, number, number]): Grid => Array.from({ length: gridSize[0] }, () => Array.from({ length: gridSize[1] }, () => Array(gridSize[2]).fill(0)));
 
 export const useGameStore = create<GameState>((set, get) => ({
+    isTutorial: false,
+    tutorialStep: 0,
+    tutorialTransitionTimeout: null, 
     gameState: 'menu',
     grid: [],
     currentPiece: null,
@@ -133,8 +238,85 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     backgroundMode: 'neon',
 
-    startSoftDrop: () => set({ dropInterval: 50 }), // 50ms is a good soft drop speed
-    stopSoftDrop: () => set((state) => ({ dropInterval: state.initialDropInterval })),
+    // 1. INITIALIZE TUTORIAL
+    startTutorial: () => {
+        get().initGame({ size: 'S', difficulty: 'Easy' }); // Start an easy game
+        set({ 
+            isTutorial: true, 
+            tutorialStep: 0,
+            // Freeze gravity initially so they can read
+            dropInterval: null as unknown as number ,
+            // 3. CRITICAL: Set the "Base" speed to slow. 
+            // This ensures that when 'stopSoftDrop' is called, it reverts to this slow speed.
+            initialDropInterval: TUTORIAL_DROP_SPEED 
+        });
+        
+        // Auto-advance the "Welcome" message after 3 seconds
+        setTimeout(() => {
+            if (get().isTutorial && get().tutorialStep === 0) {
+                set({ tutorialStep: 1, dropInterval: TUTORIAL_DROP_SPEED }); // Enable gravity
+            }
+        }, 3000);
+
+        
+    },
+
+    advanceTutorial: (triggerAction) => {
+        const { isTutorial, tutorialStep, tutorialTransitionTimeout } = get();
+        if (!isTutorial) return;
+
+        const currentStepConfig = TUTORIAL_STEPS[tutorialStep];
+        
+        if (currentStepConfig && currentStepConfig.action === triggerAction) {
+            
+            // 1. CLEAR EXISTING TIMER
+            if (tutorialTransitionTimeout) clearTimeout(tutorialTransitionTimeout);
+
+            // SPECIAL CASE: 'next' actions (clicking a button) happen immediately
+            // without the 1-second debounce wait.
+            const delay = triggerAction === 'next' ? 0 : 1000;
+
+            const newTimeoutId = setTimeout(() => {
+                const { tutorialStep: currentStepNow } = get();
+                const nextStep = currentStepNow + 1;
+                
+                if (nextStep >= TUTORIAL_STEPS.length) {
+                   // End immediately if out of steps
+                   set({ isTutorial: false, tutorialStep: 0, tutorialTransitionTimeout: null });
+                   return;
+                }
+                
+                set({ 
+                    tutorialStep: nextStep,
+                    tutorialTransitionTimeout: null 
+                });
+
+            }, delay);
+
+            set({ tutorialTransitionTimeout: newTimeoutId });
+        }
+    },
+
+    // Add a helper to trigger the 'next' action easily
+    nextTutorialStep: () => {
+        get().advanceTutorial('next');
+    },
+
+    skipTutorial: () => {
+        const { tutorialTransitionTimeout } = get();
+        if (tutorialTransitionTimeout) clearTimeout(tutorialTransitionTimeout);
+        
+        set({ isTutorial: false, tutorialStep: 0, tutorialTransitionTimeout: null });
+    },
+
+
+    startSoftDrop: () => {
+        set({ dropInterval: 50 }); // Fast speed
+        get().advanceTutorial('soft_drop'); // Check tutorial
+    },
+    stopSoftDrop: () => {
+        set((state) => ({ dropInterval: state.initialDropInterval }));
+    },
 
     toggleBackgroundMode: () => {
         const modes: BackgroundMode[] = ['space', 'neon', 'city'];
@@ -268,6 +450,8 @@ export const useGameStore = create<GameState>((set, get) => ({
                 isHoldUsed: true
             });
         }
+        // TRIGGER TUTORIAL
+        get().advanceTutorial('hold');
     },
 
     processLandedPiece: (landedPiece, dropInfo) => {
@@ -397,6 +581,12 @@ export const useGameStore = create<GameState>((set, get) => ({
             if (delta[0] !== 0 || delta[2] !== 0) { stateUpdate.currentPieceTranslations = get().currentPieceTranslations + 1; }
             if (delta[1] > 0) { stateUpdate.score = score + 1; }
             set(stateUpdate);
+
+            // TRIGGER TUTORIAL
+            if (delta[0] !== 0 || delta[2] !== 0) { // Only horizontal/depth movement counts
+                get().advanceTutorial('move');
+            }
+
         } else if (delta[1] > 0) {
             processLandedPiece(currentPiece, { isHardDrop: false, distance: 0 });
         }
@@ -421,6 +611,10 @@ export const useGameStore = create<GameState>((set, get) => ({
 
         if(engine.isValidMove(rotatedPiece, grid, gridSize)) {
             set({ currentPiece: rotatedPiece, currentPieceRotations: get().currentPieceRotations + 1 });
+
+            // TRIGGER TUTORIAL
+            get().advanceTutorial(`rotate_${axis}`);
+
         }
     },
 
@@ -440,6 +634,9 @@ export const useGameStore = create<GameState>((set, get) => ({
             }
         }
         processLandedPiece(landedPiece, { isHardDrop: true, distance: dropDistance });
+
+        // TRIGGER TUTORIAL
+        get().advanceTutorial('hard_drop');
     },
 
     tick: () => {

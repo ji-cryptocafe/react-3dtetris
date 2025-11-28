@@ -11,6 +11,7 @@ import { useInterval } from '../hooks/useInterval';
 import { useResponsiveGameSize } from '../hooks/useResponsiveGameSize';
 import { useGameStore, CAMERA_SETTINGS } from '../store/gameStore';
 import { useTetrisControls } from '../hooks/useTetrisControls'; 
+import TutorialOverlay from './TutorialOverlay';
 
 const ScreenFlash = () => {
   const { triggerShake, shakeIntensity } = useGameStore(state => ({
@@ -68,6 +69,8 @@ const GameContainer = () => {
     backgroundMode: state.backgroundMode,
     initialDropInterval: state.initialDropInterval
   }));
+
+  
   
   // --- ACTIONS ---
   const { 
@@ -87,6 +90,7 @@ const GameContainer = () => {
 
   // --- SOFT DROP LOGIC ---
   // We define these here to interact with the store's dropInterval
+  /*
   const startSoftDrop = () => {
     // 50ms is a good "fast" speed. 
     useGameStore.setState({ dropInterval: 50 });
@@ -98,6 +102,15 @@ const GameContainer = () => {
     const currentSpeed = Math.max(100, initialDropInterval - (level - 1) * 50);
     useGameStore.setState({ dropInterval: currentSpeed });
   };
+  */
+  // 1. Get the new actions from store
+  const { 
+    startSoftDrop, 
+    stopSoftDrop 
+  } = useGameStore(state => ({
+    startSoftDrop: state.startSoftDrop,
+    stopSoftDrop: state.stopSoftDrop
+  }));
 
   // --- PRO CONTROLS HOOK ---
   useTetrisControls({
@@ -169,6 +182,8 @@ const GameContainer = () => {
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <ScreenFlash /> 
+      
+      
       
       {/* HUD Elements */}
       <StatsDisplay score={score} speedLevel={level} time={timePassed} cubesPlayed={cubesPlayed} />
@@ -254,7 +269,7 @@ const GameContainer = () => {
         // During active gameplay, the restart button is in the corner
         <RestartButton onRestart={resetGame} />
       )}
-      
+      <TutorialOverlay /> 
       {/* 3D Game Canvas */}
       <div style={{ width: gameAreaSize.width, height: gameAreaSize.height }}>
         <GameBoard

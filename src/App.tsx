@@ -1,6 +1,7 @@
 import './App.css';
 import GameContainer from './components/GameContainer';
-import MainMenu, { type GameSettings } from './components/MainMenu';
+import MainMenu from './components/MainMenu';
+import { type GameSettings } from './types'; // Import types from new file
 import { useGameStore } from './store/gameStore';
 
 function App() {

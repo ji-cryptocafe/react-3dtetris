@@ -1,22 +1,18 @@
 import { useState } from 'react';
-import './MainMenu.css'; // We'll create this CSS file next
-
-// Define the types for our settings to be used across components
-export type GameSize = 'S' | 'M' | 'L';
-export type GameDifficulty = 'Easy' | 'Medium' | 'Hard';
-export interface GameSettings {
-  size: GameSize;
-  difficulty: GameDifficulty;
-}
+import { useGameStore } from '../store/gameStore'; 
+import { type GameSize, type GameDifficulty, type GameSettings } from '../types'; // Import types
+import './MainMenu.css';
 
 interface MainMenuProps {
-  // A function passed from App.tsx to start the game with the chosen settings
   onStartGame: (settings: GameSettings) => void;
 }
 
 const MainMenu = ({ onStartGame }: MainMenuProps) => {
   const [selectedSize, setSelectedSize] = useState<GameSize>('S');
   const [selectedDifficulty, setSelectedDifficulty] = useState<GameDifficulty>('Easy');
+
+  // Get the startTutorial action
+  const startTutorial = useGameStore(state => state.startTutorial);
 
   const handleStart = () => {
     onStartGame({ size: selectedSize, difficulty: selectedDifficulty });
@@ -27,6 +23,7 @@ const MainMenu = ({ onStartGame }: MainMenuProps) => {
       <div className="main-menu">
         <h1>3D Tetris</h1>
         
+        {/* ... Settings Groups (Size/Difficulty) remain unchanged ... */}
         <div className="settings-group">
           <h2>Game Size</h2>
           <div className="options">
@@ -45,9 +42,21 @@ const MainMenu = ({ onStartGame }: MainMenuProps) => {
           </div>
         </div>
 
-        <button className="start-button" onClick={handleStart}>
-          Start Game
-        </button>
+        {/* Updated Buttons Area */}
+        <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', marginTop: '30px' }}>
+          <button className="start-button" onClick={handleStart}>
+            Start Game
+          </button>
+          
+          <button 
+            className="start-button" 
+            onClick={startTutorial}
+            style={{ backgroundColor: '#17a2b8' }}
+          >
+            Tutorial
+          </button>
+        </div>
+
       </div>
     </div>
   );
