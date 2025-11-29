@@ -27,11 +27,11 @@ const TutorialOverlay = () => {
     
     switch (pos) {
       case 'top-right':
-        return { ...base, top: '180px', right: '160px', transform: 'translateX(0)' };
+        return { ...base, top: '100px', right: '160px', transform: 'translateX(0)' };
       case 'top-left':
-        return { ...base, top: '180px', left: '160px', transform: 'translateX(0)' };
+        return { ...base, top: '100px', left: '160px', transform: 'translateX(0)' };
       case 'bottom-left':
-        return { ...base, bottom: '200px', left: '40px', transform: 'translateX(0)' };
+        return { ...base, bottom: '100px', left: '200px', transform: 'translateX(0)' };
       case 'center':
       default:
         return { ...base, top: '20%', left: '50%', transform: 'translate(-50%, -50%)' };
@@ -50,21 +50,21 @@ const TutorialOverlay = () => {
     <div 
       style={{
         ...getPositionStyle(currentStep.position),
-        width: '350px',
+        width: '450px',
         zIndex: 200,
         pointerEvents: 'none' // Allow play through, but enable button pointer events below
       }}
     >
       {/* CARD CONTAINER */}
       <div style={{
-        backgroundColor: 'rgba(10, 20, 35, 0.85)', // Darker, sleeker background
+        backgroundColor: 'rgba(10, 20, 35, 0.75)', // Darker, sleeker background
         border: '1px solid rgba(0, 255, 255, 0.3)',
-        borderRadius: '12px',
+        borderRadius: '15px',
         padding: '20px',
         color: '#e0e0e0',
         textAlign: 'center',
-        boxShadow: `0 0 25px rgba(0, 255, 255, 0.15), inset 0 0 20px rgba(0, 0, 0, 0.5)`,
-        backdropFilter: 'blur(12px)',
+        boxShadow: `0 0 25px rgba(0, 255, 255, 0.15), inset 0 0 20px rgba(0, 0, 0, 0.2)`,
+        backdropFilter: 'blur(3px)',
         transform: animate ? 'scale(1.02)' : 'scale(1)',
         transition: 'transform 0.2s ease-out',
         position: 'relative'
@@ -83,7 +83,7 @@ const TutorialOverlay = () => {
           color: '#88aaff', 
           textTransform: 'uppercase', 
           letterSpacing: '3px',
-          fontSize: '0.8rem',
+          fontSize: '0.9rem',
           opacity: 0.8
         }}>
           TRAINING MODULE {tutorialStep + 1}/{TUTORIAL_STEPS.length}
@@ -91,10 +91,10 @@ const TutorialOverlay = () => {
         
         {/* BODY TEXT */}
         <p style={{ 
-          fontSize: '1.1rem', 
+          fontSize: '1.2rem', 
           margin: '0 0 20px 0',
           lineHeight: 1.5,
-          fontFamily: '"Segoe UI", sans-serif'
+          fontFamily: '"Segoe UI", sans-serif', 
         }}>
           {renderText(currentStep.text)}
         </p>
@@ -143,7 +143,7 @@ const TutorialOverlay = () => {
         </div>
       </div>
       
-      {/* CONNECTION LINE (Visual Flair) */}
+      {/* CONNECTION LINE (Visual Flair) 
       {(currentStep.position !== 'center') && (
         <div style={{
             position: 'absolute',
@@ -157,7 +157,7 @@ const TutorialOverlay = () => {
             transform: 'translateX(-50%)',
             boxShadow: '0 0 10px #00ffff'
         }} />
-      )}
+      )}*/}
     </div>
   );
 };

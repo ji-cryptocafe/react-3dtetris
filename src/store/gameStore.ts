@@ -583,8 +583,13 @@ export const useGameStore = create<GameState>((set, get) => ({
             set(stateUpdate);
 
             // TRIGGER TUTORIAL
-            if (delta[0] !== 0 || delta[2] !== 0) { // Only horizontal/depth movement counts
-                get().advanceTutorial('move');
+            // Check X-Axis Movement (Left/Right)
+            if (delta[0] !== 0) {
+                get().advanceTutorial('move_x');
+            }
+            // Check Z-Axis Movement (Forward/Backward)
+            if (delta[2] !== 0) {
+                get().advanceTutorial('move_z');
             }
 
         } else if (delta[1] > 0) {
